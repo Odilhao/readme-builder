@@ -1,0 +1,8 @@
+username = "octocat"
+
+[github]
+exclude_fork = true
+
+[[render]]
+template = "README.md.tmpl"
+output = "README.md"

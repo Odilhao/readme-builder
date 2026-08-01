@@ -1,0 +1,8 @@
+username = "octocat"
+
+[feeds.blog]
+limit = 2
+
+[[render]]
+template = "README.md.tmpl"
+output = "README.md"

@@ -1,0 +1,9 @@
+username = "octocat"
+
+[feeds.blog]
+url = "https://example.com/feed.xml"
+lmit = 2
+
+[[render]]
+template = "README.md.tmpl"
+output = "README.md"

@@ -1,0 +1,5 @@
+username = "   "
+
+[[render]]
+template = "README.md.tmpl"
+output = "README.md"

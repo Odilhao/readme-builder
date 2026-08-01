@@ -1,0 +1,4 @@
+username = "octocat"
+
+[github.repos]
+limit = 3

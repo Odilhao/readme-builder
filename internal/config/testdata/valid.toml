@@ -1,0 +1,31 @@
+username = "octocat"
+
+[github]
+exclude_forks = true
+exclude_repos = ["example-org/example-repo", "octocat/another-example"]
+exclude_orgs = ["example-org"]
+
+[github.repos]
+limit = 3
+
+# Present but empty: the section is fetched, with the default limit.
+[github.stars]
+
+# Present and explicitly zero: the section yields nothing.
+[github.contributions]
+limit = 0
+
+[feeds.blog]
+url = "https://example.com/feed.xml"
+limit = 2
+
+[feeds.notes]
+url = "https://example.com/notes.xml"
+
+[[render]]
+template = "templates/README.md.tmpl"
+output = "README.md"
+
+[[render]]
+template = "/opt/example/absolute.tmpl"
+output = "../out/index.html"

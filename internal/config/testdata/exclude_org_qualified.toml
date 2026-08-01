@@ -1,0 +1,8 @@
+username = "octocat"
+
+[github]
+exclude_orgs = ["example-org/example-repo"]
+
+[[render]]
+template = "README.md.tmpl"
+output = "README.md"

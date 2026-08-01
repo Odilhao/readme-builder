@@ -1,0 +1,31 @@
+username = "octocat"
+
+# Every section, each with a limit distinct from the others and from
+# DefaultSectionLimit, so a section wired to the wrong field is visible.
+[github.contributions]
+limit = 1
+
+[github.repos]
+limit = 2
+
+[github.forks]
+limit = 3
+
+[github.pull_requests]
+limit = 4
+
+[github.stars]
+limit = 5
+
+[github.releases]
+limit = 6
+
+[github.followers]
+limit = 7
+
+[github.gists]
+limit = 8
+
+[[render]]
+template = "README.md.tmpl"
+output = "README.md"
