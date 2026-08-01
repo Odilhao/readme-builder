@@ -1,0 +1,34 @@
+# --- Local assistant tooling (intentionally not committed for now) ---
+CLAUDE.md
+AGENTS.md
+.claude/
+
+# Local working state; the public record is the issues, commits and merges.
+implementation.md
+.github/copilot-instructions.md
+.cursor/
+.opencode/
+.gemini/
+
+# --- Go ---
+/dist/
+/bin/
+*.exe
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# --- Local runs ---
+*.local.toml
+# Root-anchored: a bare `readme-builder` would also match cmd/readme-builder
+# and silently untrack the entire command.
+/readme-builder
+/tmp/
+
+# --- Editors / OS ---
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
