@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # The race step overrides this; `go test -race` fails loudly with cgo off.
+  CGO_ENABLED: "0"
+  GOFLAGS: -mod=readonly
+  # GOTOOLCHAIN is exported after setup-go rather than set here: setup-go skips
+  # go.mod's `toolchain` directive when GOTOOLCHAIN is already local and
+  # installs the older `go` directive version instead, silently.
+
+jobs:
+  build-test:
+    name: build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here pushes; leave no credential in .git/config.
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          # Nothing to cache while there are no dependencies.
+          cache: false
+
+      - name: Pin the toolchain
+        run: echo "GOTOOLCHAIN=local" >> "$GITHUB_ENV"
+
+      - name: Assert the toolchain matches go.mod
+        run: |
+          set -euo pipefail
+          want="$(awk '/^toolchain go/ { print substr($2, 3); exit }' go.mod)"
+          if [ -z "$want" ]; then
+            echo "::error::go.mod has no toolchain directive; CI pins the toolchain from it"
+            exit 1
+          fi
+          got="$(go env GOVERSION)"
+          got="${got#go}"
+          # Distribution builds append a suffix (go1.26.5-somevendor).
+          case "$got" in
+            "$want" | "$want"-*) ;;
+            *)
+              echo "::error::toolchain drift: go.mod asks for go${want}, this runner has go${got}"
+              exit 1
+              ;;
+          esac
+          echo "toolchain go${got} matches go.mod"
+
+      - name: gofmt
+        run: |
+          set -euo pipefail
+          # gofmt -l exits 0 while listing files, so its status is not a gate.
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::these files are not gofmt-formatted:"
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      # There are no test files yet, so this step and the next pass vacuously
+      # until the first test lands.
+      - name: Test (race)
+        env:
+          # The race detector is implemented in cgo.
+          CGO_ENABLED: "1"
+        run: go test ./... -race -count=1
+
+      - name: Test with no token present
+        # Invariant: no credential is ever required, only a higher rate limit.
+        run: env -u GITHUB_TOKEN -u GH_TOKEN go test ./... -count=1
+
+      - name: go.mod and go.sum are tidy
+        run: |
+          set -euo pipefail
+          go mod tidy
+          # git diff alone would miss a go.sum tidy has just created: a new
+          # untracked file produces no diff.
+          if ! git diff --quiet -- go.mod go.sum \
+            || [ -n "$(git status --porcelain -- go.mod go.sum)" ]; then
+            echo "::error::go.mod/go.sum are not tidy; run 'go mod tidy' and commit the result"
+            git --no-pager diff -- go.mod go.sum
+            git status --porcelain -- go.mod go.sum
+            exit 1
+          fi
