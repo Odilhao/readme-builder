@@ -1,0 +1,13 @@
+username = "octocat"
+
+[[render]]
+template = "templates/README.md.tmpl"
+output = "README.md"
+
+[[render]]
+template = "/opt/example/absolute.tmpl"
+output = "/opt/example/out/README.md"
+
+[[render]]
+template = "../shared/page.html.tmpl"
+output = "../out/index.html"

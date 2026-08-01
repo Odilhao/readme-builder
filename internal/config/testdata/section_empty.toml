@@ -1,0 +1,7 @@
+username = "octocat"
+
+[github.repos]
+
+[[render]]
+template = "README.md.tmpl"
+output = "README.md"

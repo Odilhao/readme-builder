@@ -1,0 +1,8 @@
+username = "octocat"
+
+[feeds.my-feed]
+url = "https://example.com/feed.xml"
+
+[[render]]
+template = "README.md.tmpl"
+output = "README.md"

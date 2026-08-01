@@ -1,0 +1,6 @@
+username = "octocat"
+usernme = "octocat"
+
+[[render]]
+template = "README.md.tmpl"
+output = "README.md"
