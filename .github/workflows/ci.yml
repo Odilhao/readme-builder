@@ -125,8 +125,53 @@ jobs:
         # was removed: the vendor diff no longer provides automatic licence review.
         run: bash .github/scripts/check-licenses.sh
 
+      - name: Hermetic build (offline Go build)
+        # Validate that the hermeto prefetch captured the full transitive dependency graph
+        # by building the binary offline using only the prefetched cache. This gate catches
+        # prefetch gaps before the cache is uploaded as an artifact for use in build-image.
+        # GOPROXY and GOMODCACHE are set via hermeto.env with runner-relative paths.
+        env:
+          GOFLAGS: -mod=readonly
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          source ./hermeto.env
+          go build ./...
+
+      - name: Regenerate hermeto.env for container mount path
+        # The hermeto.env was generated with --for-output-dir "$PWD/hermeto-output" for the
+        # runner's offline-build step above. But build-image mounts the cache at /tmp/hermeto-output
+        # inside the container, so we need to regenerate hermeto.env with that path before uploading.
+        # This ensures GOPROXY/GOMODCACHE in the container point to the correct mount location.
+        run: |
+          set -euo pipefail
+          podman run --rm \
+            -v "$PWD:$PWD:z" \
+            -w "$PWD" \
+            "ghcr.io/hermetoproject/hermeto@sha256:bc33ceb313fc291736f546dc3bfad383d640cea8cb24e3f0d266686bdfa99d16" \
+            generate-env \
+            ./hermeto-output \
+            -o ./hermeto.env \
+            --for-output-dir /tmp/hermeto-output
+
+      - name: Upload hermeto cache for image build
+        # Share the prefetched hermeto cache with build-image job via artifact.
+        # Implements the design decision: "one prefetch per release, feeding both
+        # the goreleaser binaries and the image" (per implementation.md M2 rationale).
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hermeto-cache
+          path: |
+            hermeto-output/
+            hermeto.env
+          retention-days: 1
+
   build-image:
     name: build & validate OCI image
+    needs: build-test
+    env:
+      IMAGE_NAME: ghcr.io/odilhao/readme-builder
+      IMAGE_TAG: latest
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -137,8 +182,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Prefetch dependencies with hermeto
-        run: bash .github/scripts/prefetch-deps.sh
+      - name: Download hermeto cache from build-test
+        # Reuse the hermeto prefetch from build-test job via artifact.
+        # Implements: one prefetch per release, feeding both builds (goreleaser and container image).
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: hermeto-cache
 
       - name: Install QEMU for cross-architecture builds
         # Multi-platform RUN instructions (e.g., go build in Containerfile) require qemu-user-static
@@ -154,8 +203,8 @@ jobs:
         # The Containerfile sources /tmp/hermeto.env to enable offline builds.
         uses: redhat-actions/buildah-build@7a95fa7ee0f02d552a32753e7414641a04307056 # v2.13
         with:
-          image: readme-builder
-          tags: latest
+          image: ${{ env.IMAGE_NAME }}
+          tags: ${{ env.IMAGE_TAG }}
           platforms: linux/amd64, linux/arm64
           containerfiles: |
             ./Containerfile
