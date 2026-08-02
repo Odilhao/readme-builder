@@ -1,0 +1,671 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "components": [
+    {
+      "bom-ref": "pkg:golang/bufio?type=package",
+      "name": "bufio",
+      "purl": "pkg:golang/bufio?type=package",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/crypto/internal/entropy/v1.0.0?type=package",
+      "name": "crypto/internal/entropy/v1.0.0",
+      "purl": "pkg:golang/crypto/internal/entropy/v1.0.0?type=package",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/Odilhao/readme-builder/cmd/readme-builder?type=package",
+      "name": "github.com/Odilhao/readme-builder/cmd/readme-builder",
+      "purl": "pkg:golang/github.com/Odilhao/readme-builder/cmd/readme-builder?type=package",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/google/go-github/v89/github@v89.0.0?type=package",
+      "name": "github.com/google/go-github/v89/github",
+      "purl": "pkg:golang/github.com/google/go-github/v89/github@v89.0.0?type=package",
+      "version": "v89.0.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/google/go-github/v89@v89.0.0?type=module",
+      "name": "github.com/google/go-github/v89",
+      "purl": "pkg:golang/github.com/google/go-github/v89@v89.0.0?type=module",
+      "version": "v89.0.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/google/go-querystring/query@v1.2.0?type=package",
+      "name": "github.com/google/go-querystring/query",
+      "purl": "pkg:golang/github.com/google/go-querystring/query@v1.2.0?type=package",
+      "version": "v1.2.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/google/go-querystring@v1.2.0?type=module",
+      "name": "github.com/google/go-querystring",
+      "purl": "pkg:golang/github.com/google/go-querystring@v1.2.0?type=module",
+      "version": "v1.2.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/mmcdole/gofeed/atom@v1.4.0?type=package",
+      "name": "github.com/mmcdole/gofeed/atom",
+      "purl": "pkg:golang/github.com/mmcdole/gofeed/atom@v1.4.0?type=package",
+      "version": "v1.4.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/mmcdole/gofeed/extensions@v1.4.0?type=package",
+      "name": "github.com/mmcdole/gofeed/extensions",
+      "purl": "pkg:golang/github.com/mmcdole/gofeed/extensions@v1.4.0?type=package",
+      "version": "v1.4.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/mmcdole/gofeed/internal/shared@v1.4.0?type=package",
+      "name": "github.com/mmcdole/gofeed/internal/shared",
+      "purl": "pkg:golang/github.com/mmcdole/gofeed/internal/shared@v1.4.0?type=package",
+      "version": "v1.4.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/mmcdole/gofeed/json@v1.4.0?type=package",
+      "name": "github.com/mmcdole/gofeed/json",
+      "purl": "pkg:golang/github.com/mmcdole/gofeed/json@v1.4.0?type=package",
+      "version": "v1.4.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/mmcdole/gofeed/rss@v1.4.0?type=package",
+      "name": "github.com/mmcdole/gofeed/rss",
+      "purl": "pkg:golang/github.com/mmcdole/gofeed/rss@v1.4.0?type=package",
+      "version": "v1.4.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/mmcdole/gofeed@v1.4.0?type=module",
+      "name": "github.com/mmcdole/gofeed",
+      "purl": "pkg:golang/github.com/mmcdole/gofeed@v1.4.0?type=module",
+      "version": "v1.4.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/mmcdole/gofeed@v1.4.0?type=package",
+      "name": "github.com/mmcdole/gofeed",
+      "purl": "pkg:golang/github.com/mmcdole/gofeed@v1.4.0?type=package",
+      "version": "v1.4.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/mmcdole/goxpp/v2@v2.0.0?type=module",
+      "name": "github.com/mmcdole/goxpp/v2",
+      "purl": "pkg:golang/github.com/mmcdole/goxpp/v2@v2.0.0?type=module",
+      "version": "v2.0.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/mmcdole/goxpp/v2@v2.0.0?type=package",
+      "name": "github.com/mmcdole/goxpp/v2",
+      "purl": "pkg:golang/github.com/mmcdole/goxpp/v2@v2.0.0?type=package",
+      "version": "v2.0.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/pelletier/go-toml/v2/internal/parserbridge@v2.4.3?type=package",
+      "name": "github.com/pelletier/go-toml/v2/internal/parserbridge",
+      "purl": "pkg:golang/github.com/pelletier/go-toml/v2/internal/parserbridge@v2.4.3?type=package",
+      "version": "v2.4.3",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/pelletier/go-toml/v2/internal/tracker@v2.4.3?type=package",
+      "name": "github.com/pelletier/go-toml/v2/internal/tracker",
+      "purl": "pkg:golang/github.com/pelletier/go-toml/v2/internal/tracker@v2.4.3?type=package",
+      "version": "v2.4.3",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/pelletier/go-toml/v2/unstable@v2.4.3?type=package",
+      "name": "github.com/pelletier/go-toml/v2/unstable",
+      "purl": "pkg:golang/github.com/pelletier/go-toml/v2/unstable@v2.4.3?type=package",
+      "version": "v2.4.3",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/pelletier/go-toml/v2@v2.4.3?type=module",
+      "name": "github.com/pelletier/go-toml/v2",
+      "purl": "pkg:golang/github.com/pelletier/go-toml/v2@v2.4.3?type=module",
+      "version": "v2.4.3",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/pelletier/go-toml/v2@v2.4.3?type=package",
+      "name": "github.com/pelletier/go-toml/v2",
+      "purl": "pkg:golang/github.com/pelletier/go-toml/v2@v2.4.3?type=package",
+      "version": "v2.4.3",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/net/html/atom@v0.56.0?type=package",
+      "name": "golang.org/x/net/html/atom",
+      "purl": "pkg:golang/golang.org/x/net/html/atom@v0.56.0?type=package",
+      "version": "v0.56.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/net/html/charset@v0.56.0?type=package",
+      "name": "golang.org/x/net/html/charset",
+      "purl": "pkg:golang/golang.org/x/net/html/charset@v0.56.0?type=package",
+      "version": "v0.56.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/net/html@v0.56.0?type=package",
+      "name": "golang.org/x/net/html",
+      "purl": "pkg:golang/golang.org/x/net/html@v0.56.0?type=package",
+      "version": "v0.56.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/net@v0.56.0?type=module",
+      "name": "golang.org/x/net",
+      "purl": "pkg:golang/golang.org/x/net@v0.56.0?type=module",
+      "version": "v0.56.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/encoding/charmap@v0.38.0?type=package",
+      "name": "golang.org/x/text/encoding/charmap",
+      "purl": "pkg:golang/golang.org/x/text/encoding/charmap@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/encoding/htmlindex@v0.38.0?type=package",
+      "name": "golang.org/x/text/encoding/htmlindex",
+      "purl": "pkg:golang/golang.org/x/text/encoding/htmlindex@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/encoding/internal/identifier@v0.38.0?type=package",
+      "name": "golang.org/x/text/encoding/internal/identifier",
+      "purl": "pkg:golang/golang.org/x/text/encoding/internal/identifier@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/encoding/internal@v0.38.0?type=package",
+      "name": "golang.org/x/text/encoding/internal",
+      "purl": "pkg:golang/golang.org/x/text/encoding/internal@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/encoding/japanese@v0.38.0?type=package",
+      "name": "golang.org/x/text/encoding/japanese",
+      "purl": "pkg:golang/golang.org/x/text/encoding/japanese@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/encoding/korean@v0.38.0?type=package",
+      "name": "golang.org/x/text/encoding/korean",
+      "purl": "pkg:golang/golang.org/x/text/encoding/korean@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/encoding/simplifiedchinese@v0.38.0?type=package",
+      "name": "golang.org/x/text/encoding/simplifiedchinese",
+      "purl": "pkg:golang/golang.org/x/text/encoding/simplifiedchinese@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/encoding/traditionalchinese@v0.38.0?type=package",
+      "name": "golang.org/x/text/encoding/traditionalchinese",
+      "purl": "pkg:golang/golang.org/x/text/encoding/traditionalchinese@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/encoding/unicode@v0.38.0?type=package",
+      "name": "golang.org/x/text/encoding/unicode",
+      "purl": "pkg:golang/golang.org/x/text/encoding/unicode@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/encoding@v0.38.0?type=package",
+      "name": "golang.org/x/text/encoding",
+      "purl": "pkg:golang/golang.org/x/text/encoding@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/internal/language/compact@v0.38.0?type=package",
+      "name": "golang.org/x/text/internal/language/compact",
+      "purl": "pkg:golang/golang.org/x/text/internal/language/compact@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/internal/language@v0.38.0?type=package",
+      "name": "golang.org/x/text/internal/language",
+      "purl": "pkg:golang/golang.org/x/text/internal/language@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/internal/tag@v0.38.0?type=package",
+      "name": "golang.org/x/text/internal/tag",
+      "purl": "pkg:golang/golang.org/x/text/internal/tag@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/internal/utf8internal@v0.38.0?type=package",
+      "name": "golang.org/x/text/internal/utf8internal",
+      "purl": "pkg:golang/golang.org/x/text/internal/utf8internal@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/language@v0.38.0?type=package",
+      "name": "golang.org/x/text/language",
+      "purl": "pkg:golang/golang.org/x/text/language@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/runes@v0.38.0?type=package",
+      "name": "golang.org/x/text/runes",
+      "purl": "pkg:golang/golang.org/x/text/runes@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text/transform@v0.38.0?type=package",
+      "name": "golang.org/x/text/transform",
+      "purl": "pkg:golang/golang.org/x/text/transform@v0.38.0?type=package",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/text@v0.38.0?type=module",
+      "name": "golang.org/x/text",
+      "purl": "pkg:golang/golang.org/x/text@v0.38.0?type=module",
+      "version": "v0.38.0",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/vendor/golang.org/x/net/dns/dnsmessage?type=package",
+      "name": "vendor/golang.org/x/net/dns/dnsmessage",
+      "purl": "pkg:golang/vendor/golang.org/x/net/dns/dnsmessage?type=package",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/vendor/golang.org/x/net/http/httpguts?type=package",
+      "name": "vendor/golang.org/x/net/http/httpguts",
+      "purl": "pkg:golang/vendor/golang.org/x/net/http/httpguts?type=package",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/vendor/golang.org/x/net/http/httpproxy?type=package",
+      "name": "vendor/golang.org/x/net/http/httpproxy",
+      "purl": "pkg:golang/vendor/golang.org/x/net/http/httpproxy?type=package",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/vendor/golang.org/x/net/http2/hpack?type=package",
+      "name": "vendor/golang.org/x/net/http2/hpack",
+      "purl": "pkg:golang/vendor/golang.org/x/net/http2/hpack?type=package",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/vendor/golang.org/x/net/idna?type=package",
+      "name": "vendor/golang.org/x/net/idna",
+      "purl": "pkg:golang/vendor/golang.org/x/net/idna?type=package",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/vendor/golang.org/x/text/secure/bidirule?type=package",
+      "name": "vendor/golang.org/x/text/secure/bidirule",
+      "purl": "pkg:golang/vendor/golang.org/x/text/secure/bidirule?type=package",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/vendor/golang.org/x/text/transform?type=package",
+      "name": "vendor/golang.org/x/text/transform",
+      "purl": "pkg:golang/vendor/golang.org/x/text/transform?type=package",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/vendor/golang.org/x/text/unicode/bidi?type=package",
+      "name": "vendor/golang.org/x/text/unicode/bidi",
+      "purl": "pkg:golang/vendor/golang.org/x/text/unicode/bidi?type=package",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:golang/vendor/golang.org/x/text/unicode/norm?type=package",
+      "name": "vendor/golang.org/x/text/unicode/norm",
+      "purl": "pkg:golang/vendor/golang.org/x/text/unicode/norm?type=package",
+      "properties": [
+        {
+          "name": "hermeto:found_by",
+          "value": "hermeto"
+        }
+      ],
+      "type": "library"
+    }
+  ]
+}
