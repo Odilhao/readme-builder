@@ -25,6 +25,8 @@ coverage.html
 # and silently untrack the entire command.
 /readme-builder
 /tmp/
+hermeto-output/
+hermeto.env
 
 # --- Editors / OS ---
 .DS_Store

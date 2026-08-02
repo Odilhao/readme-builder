@@ -1,0 +1,15 @@
+# Module license whitelist
+# Format: module_path[@version] license_spdx_id
+# Version is optional; if specified, only that exact version is whitelisted.
+# If omitted, any version of the module is accepted.
+
+# Direct dependencies
+github.com/google/go-github/v89 BSD-3-Clause
+github.com/mmcdole/gofeed MIT
+github.com/pelletier/go-toml/v2 MIT
+
+# Transitive dependencies (inferred from go.mod/go.sum)
+github.com/google/go-querystring BSD-3-Clause
+github.com/mmcdole/goxpp/v2 MIT
+golang.org/x/net BSD-3-Clause
+golang.org/x/text BSD-3-Clause
