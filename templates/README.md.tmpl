@@ -1,0 +1,33 @@
+# {{.User.Name}}
+
+{{.User.Bio}}
+
+## GitHub Activity
+
+### Contributions
+
+{{range .GitHub.Contributions -}}
+- {{.Repo}}: {{.Events}} events
+{{end}}
+
+### Repositories
+
+{{range .GitHub.Repos -}}
+- [{{.Name}}]({{.URL}}) — {{.Description}} (pushed {{humanize .PushedAt}})
+{{end}}
+
+### Pull Requests
+
+{{range .GitHub.PullRequests -}}
+- [{{.Title}}]({{.URL}}) in {{.Repo}} ({{.State}})
+{{end}}
+
+## Feeds
+
+{{range $name, $items := .Feeds -}}
+### {{$name}}
+
+{{range $items -}}
+- [{{.Title}}]({{.URL}})
+{{end}}
+{{end}}
