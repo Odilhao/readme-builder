@@ -13,7 +13,7 @@
 ### Repositories
 
 {{range .GitHub.Repos -}}
-- [{{.Name}}]({{.URL}}) — {{.Description}} (pushed {{humanize .PushedAt}})
+- [{{.Name}}]({{.URL}}){{if .Description}} — {{.Description}}{{end}} (pushed {{humanize .PushedAt}})
 {{end}}
 
 ### Pull Requests
