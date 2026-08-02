@@ -14,15 +14,14 @@ import (
 )
 
 var (
-	configPath = flag.String("config", "", "Path to config.toml (required)")
-	check      = flag.Bool("check", false, "Render and exit 1 on drift without writing")
-	dumpJSON   = flag.String("dump-json", "", "Emit the data model as JSON to this path (- for stdout)")
-	write      = flag.String("write", "", "Write rendered files (- for stdout)")
-	verbose    = flag.Bool("v", false, "Verbose output")
-	version    = flag.Bool("version", false, "Print version and exit")
+	configPath     = flag.String("config", "", "Path to config.toml (required)")
+	check          = flag.Bool("check", false, "Render and exit 1 on drift without writing")
+	dumpJSON       = flag.String("dump-json", "", "Emit the data model as JSON to this path (- for stdout)")
+	write          = flag.String("write", "", "Write rendered files (- for stdout)")
+	verbose        = flag.Bool("v", false, "Verbose output")
+	version        = flag.Bool("version", false, "Print version and exit")
+	currentVersion = "dev"
 )
-
-const currentVersion = "dev"
 
 func main() {
 	flag.Parse()
