@@ -165,6 +165,156 @@ jobs:
             hermeto-output/
             hermeto.env
           retention-days: 1
+          include-hidden-files: true
+
+  build-binary-reproducibility:
+    name: build binaries & verify reproducibility
+    needs: build-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download hermeto cache from build-test
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: hermeto-cache
+
+      - name: Regenerate hermeto.env for bare runner (host paths)
+        # The artifact contains hermeto.env with container paths (/tmp/hermeto-output).
+        # This job runs on the bare runner with the cache at $PWD/hermeto-output.
+        # Regenerate hermeto.env with host paths, reusing the prefetched cache data.
+        run: |
+          set -euo pipefail
+          podman run --rm \
+            -v "$PWD:$PWD:z" \
+            -w "$PWD" \
+            "ghcr.io/hermetoproject/hermeto@sha256:bc33ceb313fc291736f546dc3bfad383d640cea8cb24e3f0d266686bdfa99d16" \
+            generate-env \
+            ./hermeto-output \
+            -o ./hermeto.env \
+            --for-output-dir "$PWD/hermeto-output"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Pin the toolchain
+        run: echo "GOTOOLCHAIN=local" >> "$GITHUB_ENV"
+
+      - name: Set up goreleaser
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+        with:
+          install-only: true
+
+      - name: Validate goreleaser config
+        run: goreleaser check
+
+      - name: Derive SOURCE_DATE_EPOCH from commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
+      - name: Build binaries (first run)
+        env:
+          GOFLAGS: -mod=readonly
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          source ./hermeto.env
+          goreleaser build --snapshot --clean
+          mkdir -p /tmp/build-run-1
+          # Collect binaries with arch-qualified names to prevent overwrites
+          while IFS= read -r binary_path; do
+            # Extract architecture from path: dist/readme-builder_linux_ARCH_vX/readme-builder
+            arch=$(echo "$binary_path" | grep -oP '_linux_\K[^_]+' || echo "unknown")
+            cp "$binary_path" "/tmp/build-run-1/readme-builder-linux-${arch}"
+          done < <(find dist -type f -path '*/readme-builder')
+          # Verify exactly 2 binaries were collected (amd64 and arm64)
+          [ "$(ls /tmp/build-run-1 | wc -l)" -eq 2 ] || {
+            echo "::error::Expected 2 binaries in /tmp/build-run-1, found $(ls /tmp/build-run-1 | wc -l)"
+            ls -la /tmp/build-run-1
+            exit 1
+          }
+
+      - name: Build binaries (second run)
+        env:
+          GOFLAGS: -mod=readonly
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          source ./hermeto.env
+          rm -rf dist
+          goreleaser build --snapshot --clean
+          mkdir -p /tmp/build-run-2
+          # Collect binaries with arch-qualified names to prevent overwrites
+          while IFS= read -r binary_path; do
+            # Extract architecture from path: dist/readme-builder_linux_ARCH_vX/readme-builder
+            arch=$(echo "$binary_path" | grep -oP '_linux_\K[^_]+' || echo "unknown")
+            cp "$binary_path" "/tmp/build-run-2/readme-builder-linux-${arch}"
+          done < <(find dist -type f -path '*/readme-builder')
+          # Verify exactly 2 binaries were collected (amd64 and arm64)
+          [ "$(ls /tmp/build-run-2 | wc -l)" -eq 2 ] || {
+            echo "::error::Expected 2 binaries in /tmp/build-run-2, found $(ls /tmp/build-run-2 | wc -l)"
+            ls -la /tmp/build-run-2
+            exit 1
+          }
+
+      - name: Verify reproducibility (binary digests match)
+        run: |
+          set -euo pipefail
+
+          # Verify both directories have exactly 2 files before comparing
+          count1=$(ls /tmp/build-run-1 | wc -l)
+          count2=$(ls /tmp/build-run-2 | wc -l)
+          if [ "$count1" -ne 2 ] || [ "$count2" -ne 2 ]; then
+            echo "::error::Binary count mismatch: build-run-1 has $count1 files, build-run-2 has $count2 files"
+            exit 1
+          fi
+
+          echo "Build 1 SHA256 hashes:"
+          (cd /tmp/build-run-1 && sha256sum *)
+          echo ""
+          echo "Build 2 SHA256 hashes:"
+          (cd /tmp/build-run-2 && sha256sum *)
+          echo ""
+
+          # Independently verify each architecture
+          fail=false
+          for arch in amd64 arm64; do
+            binary="readme-builder-linux-${arch}"
+            if [ ! -f "/tmp/build-run-1/$binary" ] || [ ! -f "/tmp/build-run-2/$binary" ]; then
+              echo "::error::Missing binary for $arch architecture"
+              ls -la /tmp/build-run-1/ /tmp/build-run-2/
+              fail=true
+              continue
+            fi
+
+            hash1=$(sha256sum "/tmp/build-run-1/$binary" | awk '{print $1}')
+            hash2=$(sha256sum "/tmp/build-run-2/$binary" | awk '{print $1}')
+
+            if [ "$hash1" = "$hash2" ]; then
+              echo "✓ $arch: reproducible (hash: ${hash1:0:16}...)"
+            else
+              echo "::error::$arch: reproducibility FAILED"
+              echo "  Build 1: $hash1"
+              echo "  Build 2: $hash2"
+              fail=true
+            fi
+          done
+
+          if [ "$fail" = true ]; then
+            echo "::error::One or more architectures failed reproducibility check"
+            exit 1
+          fi
+
+          echo ""
+          echo "Reproducibility check passed: both builds produced identical binaries for all architectures"
 
   build-image:
     name: build & validate OCI image

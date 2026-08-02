@@ -1,0 +1,38 @@
+# GoReleaser configuration for readme-builder.
+# Builds reproducible, hermetically-sealed binaries using prefetched Go modules.
+# VERSION: set by CI via SOURCE_DATE_EPOCH and goreleaser template variables.
+# Dependencies: sourced from hermeto-prefetch via GOPROXY, no network access.
+
+version: 2
+
+env:
+  # Hermetically sealed: no cgo, no network access.
+  - CGO_ENABLED=0
+  # Build tools will source hermeto.env to set GOPROXY and GOMODCACHE.
+  # This is not set here because it comes from the CI environment.
+
+builds:
+  - id: readme-builder
+    main: ./cmd/readme-builder
+    binary: readme-builder
+    ldflags:
+      - -s -w
+      - -X main.currentVersion={{.Version}}
+    flags:
+      - -trimpath
+      - -buildvcs=true
+      - -mod=readonly
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    # mod_timestamp: reproducible builds use SOURCE_DATE_EPOCH from CI (git commit date).
+    # Set in CI job via git log -1 --format=%ct and exported to GITHUB_ENV.
+    mod_timestamp: '{{ .Env.SOURCE_DATE_EPOCH }}'
+    # GoReleaser runs in the build environment; hermeto.env sets GOPROXY/GOMODCACHE.
+
+# No release or publish stages: this issue (#15) is build config only.
+# Release automation (#16/#17/#18) will add the push, attestations, and tag gates.
