@@ -3,13 +3,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/Odilhao/readme-builder/internal/config"
-	"github.com/Odilhao/readme-builder/internal/model"
+	"github.com/Odilhao/readme-builder/internal/fetch"
 	"github.com/Odilhao/readme-builder/internal/render"
 )
 
@@ -50,13 +50,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Construct minimal Data model
-	// Fetch wiring is a separate issue; for now create empty but valid data
-	data := &model.Data{
-		User: model.User{
-			Login: cfg.Username,
-		},
-		Now: time.Now().UTC(),
+	// Create fetch client (token is optional; unauthenticated is valid)
+	c, err := fetch.New(fetch.Options{})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: fetch client: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Fetch data from configured sources
+	data, err := fetch.Fetch(context.Background(), c, cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: fetch: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Handle -dump-json
