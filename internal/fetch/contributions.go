@@ -62,7 +62,7 @@ func Contributions(ctx context.Context, c *Client, user string, gh config.GitHub
 		return nil, err
 	}
 
-	candidates := groupByRepo(events, gh)
+	candidates := groupByRepo(events, user, gh)
 	sort.Slice(candidates, func(i, j int) bool {
 		return candidates[i].maxCreated.After(candidates[j].maxCreated)
 	})
@@ -113,7 +113,7 @@ func listPublicEvents(ctx context.Context, c *Client, user string) ([]*github.Ev
 // exclusions (ExcludeRepos, ExcludeOrgs), and accumulates per-repo event
 // counts and the max CreatedAt. Excluded repos are dropped entirely here,
 // before any detail lookup, per the issue.
-func groupByRepo(events []*github.Event, gh config.GitHub) []candidate {
+func groupByRepo(events []*github.Event, user string, gh config.GitHub) []candidate {
 	byRepo := make(map[string]*candidate)
 	var order []string
 
@@ -122,7 +122,7 @@ func groupByRepo(events []*github.Event, gh config.GitHub) []candidate {
 			continue
 		}
 		fullName := e.GetRepo().GetName()
-		if fullName == "" || excluded(fullName, gh) {
+		if fullName == "" || excluded(fullName, user, gh) {
 			continue
 		}
 
@@ -145,16 +145,23 @@ func groupByRepo(events []*github.Event, gh config.GitHub) []candidate {
 	return out
 }
 
-// excluded reports whether fullName ("owner/name") matches ExcludeRepos or
-// its owner matches ExcludeOrgs. Matching is case-insensitive: GitHub logins
-// and repo names are case-insensitive even though they preserve case.
-func excluded(fullName string, gh config.GitHub) bool {
+// excluded reports whether fullName ("owner/name") matches ExcludeRepos, its
+// owner matches ExcludeOrgs, or it is the special GitHub profile repo
+// ({user}/{user}) - always excluded, unconditionally, since that repo's
+// README is what this tool generates, not a contribution to report on
+// itself. Matching is case-insensitive throughout: GitHub logins and repo
+// names are case-insensitive even though they preserve case.
+func excluded(fullName, user string, gh config.GitHub) bool {
+	owner, name, ok := strings.Cut(fullName, "/")
+	if ok && strings.EqualFold(owner, user) && strings.EqualFold(name, user) {
+		return true
+	}
+
 	for _, r := range gh.ExcludeRepos {
 		if strings.EqualFold(r, fullName) {
 			return true
 		}
 	}
-	owner, _, ok := strings.Cut(fullName, "/")
 	if !ok {
 		return false
 	}

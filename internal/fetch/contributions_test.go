@@ -547,6 +547,84 @@ func TestContributionsAccumulatesEventsAcrossPages(t *testing.T) {
 	}
 }
 
+// TestContributionsExcludesSelfRepoUnconditionally proves the special GitHub
+// profile repo ({user}/{user}) is always dropped - no config field controls
+// it, and it must never reach the fork detail lookup.
+func TestContributionsExcludesSelfRepoUnconditionally(t *testing.T) {
+	base := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	pages := [][]event{{
+		ev("PushEvent", "octocat/octocat", base),
+		ev("PushEvent", "example-org/example-repo", base),
+	}}
+	srv := newContribServer(t, pages, nil)
+	c := newTestClient(t, srv)
+
+	got, err := Contributions(context.Background(), c, "octocat", ghConfig(10, true, nil, nil))
+	if err != nil {
+		t.Fatalf("Contributions: %v", err)
+	}
+	if len(got) != 1 || got[0].Repo != "example-org/example-repo" {
+		t.Errorf("got %+v, want only example-org/example-repo (self-repo must be excluded)", got)
+	}
+	if n := srv.repoDetailRequests(); n != 1 {
+		t.Errorf("repo detail requests = %d, want 1 (self-repo must not be looked up)", n)
+	}
+}
+
+// TestContributionsExcludesSelfRepoCaseInsensitively proves the self-repo
+// match is case-insensitive, matching excluded()'s existing behavior for
+// ExcludeRepos/ExcludeOrgs.
+func TestContributionsExcludesSelfRepoCaseInsensitively(t *testing.T) {
+	base := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	pages := [][]event{{
+		ev("PushEvent", "Octocat/Octocat", base),
+		ev("PushEvent", "example-org/example-repo", base),
+	}}
+	srv := newContribServer(t, pages, nil)
+	c := newTestClient(t, srv)
+
+	got, err := Contributions(context.Background(), c, "octocat", ghConfig(10, false, nil, nil))
+	if err != nil {
+		t.Fatalf("Contributions: %v", err)
+	}
+	if len(got) != 1 || got[0].Repo != "example-org/example-repo" {
+		t.Errorf("got %+v, want only example-org/example-repo (self-repo exclusion must be case-insensitive)", got)
+	}
+}
+
+// TestContributionsSelfRepoExclusionRequiresBothOwnerAndNameMatch proves the
+// self-repo guard in excluded() checks owner AND name against user, not
+// either alone: a third party's repo named after the user
+// (some-org/octocat) and the user's own differently-named repo
+// (octocat/some-other-repo) are both real contributions, not the profile
+// repo, and must not be excluded.
+func TestContributionsSelfRepoExclusionRequiresBothOwnerAndNameMatch(t *testing.T) {
+	base := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	pages := [][]event{{
+		ev("PushEvent", "some-org/octocat", base),
+		ev("PushEvent", "octocat/some-other-repo", base),
+	}}
+	srv := newContribServer(t, pages, nil)
+	c := newTestClient(t, srv)
+
+	got, err := Contributions(context.Background(), c, "octocat", ghConfig(10, false, nil, nil))
+	if err != nil {
+		t.Fatalf("Contributions: %v", err)
+	}
+
+	want := map[string]bool{"some-org/octocat": false, "octocat/some-other-repo": false}
+	for _, contrib := range got {
+		if _, ok := want[contrib.Repo]; ok {
+			want[contrib.Repo] = true
+		}
+	}
+	for repo, found := range want {
+		if !found {
+			t.Errorf("got %+v, want %s present (self-repo exclusion requires both owner and name to match user)", got, repo)
+		}
+	}
+}
+
 func TestContributionsReturnsErrorFromEventsList(t *testing.T) {
 	srv := newContribServerWithOpts(t, nil, nil, contribServerOpts{eventsStatus: http.StatusInternalServerError})
 	c := newTestClient(t, srv)

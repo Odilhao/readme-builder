@@ -408,6 +408,85 @@ func TestForksUsesCallerSuppliedUsername(t *testing.T) {
 	}
 }
 
+// TestReposExcludesSelfRepoUnconditionally proves the special GitHub profile
+// repo ({user}/{user}) is always dropped from Repos - no config field
+// controls it.
+func TestReposExcludesSelfRepoUnconditionally(t *testing.T) {
+	pushed := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	pages := [][]repoItem{{
+		{Name: "octocat", FullName: "octocat/octocat", PushedAt: pushed},
+		{Name: "Hello-World", FullName: "octocat/Hello-World", PushedAt: pushed},
+	}}
+	srv := newReposServer(t, pages, 0)
+	c := testClient(t, srv.URL)
+
+	got, err := Repos(context.Background(), c, "octocat", repoConfig(10))
+	if err != nil {
+		t.Fatalf("Repos: %v", err)
+	}
+	if len(got) != 1 || got[0].FullName != "octocat/Hello-World" {
+		t.Errorf("got %+v, want only octocat/Hello-World (self-repo must be excluded, unconditionally, no config field)", got)
+	}
+}
+
+// TestForksExcludesSelfRepoUnconditionally is
+// TestReposExcludesSelfRepoUnconditionally for Forks - the self-repo is never
+// a fork in practice, but the exclusion must not depend on that.
+func TestForksExcludesSelfRepoUnconditionally(t *testing.T) {
+	pushed := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	pages := [][]repoItem{{
+		{Name: "octocat", FullName: "octocat/octocat", Fork: true, PushedAt: pushed},
+		{Name: "a-fork", FullName: "octocat/a-fork", Fork: true, PushedAt: pushed},
+	}}
+	srv := newReposServer(t, pages, 0)
+	c := testClient(t, srv.URL)
+
+	got, err := Forks(context.Background(), c, "octocat", forkConfig(10))
+	if err != nil {
+		t.Fatalf("Forks: %v", err)
+	}
+	if len(got) != 1 || got[0].FullName != "octocat/a-fork" {
+		t.Errorf("got %+v, want only octocat/a-fork (self-repo must be excluded even among forks)", got)
+	}
+}
+
+// TestReposMakesNoAuthorizationHeaderWithoutToken exercises a high-level
+// fetcher end-to-end (not just the shared client) to prove the no-token
+// guarantee holds all the way through Repos: no Authorization header is sent
+// when Options.Token is empty.
+func TestReposMakesNoAuthorizationHeaderWithoutToken(t *testing.T) {
+	pushed := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	seen := false
+	var gotAuth string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/users/octocat/repos", func(w http.ResponseWriter, r *http.Request) {
+		seen = true
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]repoItem{
+			{Name: "Hello-World", FullName: "octocat/Hello-World", PushedAt: pushed},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	c, err := New(Options{BaseURL: srv.URL + "/"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if _, err := Repos(context.Background(), c, "octocat", repoConfig(10)); err != nil {
+		t.Fatalf("Repos: %v", err)
+	}
+	if !seen {
+		t.Fatal("request never reached the server")
+	}
+	if gotAuth != "" {
+		t.Errorf("Authorization = %q, want empty (no token configured)", gotAuth)
+	}
+}
+
 func TestReposReturnsErrorFromList(t *testing.T) {
 	srv := newReposServer(t, nil, http.StatusInternalServerError)
 	c := testClient(t, srv.URL)
