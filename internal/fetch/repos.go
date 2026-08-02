@@ -56,7 +56,7 @@ func listRepos(ctx context.Context, c *Client, user string, gh config.GitHub, li
 			return nil, err
 		}
 		for _, r := range repos {
-			if r.GetFork() != wantFork || excluded(r.GetFullName(), gh) {
+			if r.GetFork() != wantFork || excluded(r.GetFullName(), user, gh) {
 				continue
 			}
 			out = append(out, model.Repo{

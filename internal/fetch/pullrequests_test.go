@@ -372,6 +372,30 @@ func TestRepoFullNameFromURLReturnsEmptyOnMalformedURL(t *testing.T) {
 	}
 }
 
+// TestPullRequestsExcludesSelfRepoUnconditionally proves the special GitHub
+// profile repo ({user}/{user}) is always dropped from PullRequests - no
+// config field controls it, and no second search request is spent to filter
+// it.
+func TestPullRequestsExcludesSelfRepoUnconditionally(t *testing.T) {
+	items := []searchIssue{
+		pr(1, "self", "octocat/octocat"),
+		pr(2, "kept", "example-org/example-repo"),
+	}
+	srv := newSearchServer(t, items, 0)
+	c := testClient(t, srv.URL)
+
+	got, err := PullRequests(context.Background(), c, "octocat", prConfig(10))
+	if err != nil {
+		t.Fatalf("PullRequests: %v", err)
+	}
+	if len(got) != 1 || got[0].Repo != "example-org/example-repo" {
+		t.Errorf("got %+v, want only example-org/example-repo (self-repo PRs must be excluded)", got)
+	}
+	if len(srv.queries) != 1 {
+		t.Errorf("observed %d /search/issues requests, want exactly 1", len(srv.queries))
+	}
+}
+
 func TestPullRequestsReturnsErrorFromSearch(t *testing.T) {
 	srv := newSearchServer(t, nil, http.StatusForbidden)
 	c := testClient(t, srv.URL)

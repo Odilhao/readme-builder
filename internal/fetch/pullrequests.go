@@ -55,7 +55,7 @@ func PullRequests(ctx context.Context, c *Client, user string, gh config.GitHub)
 			continue
 		}
 		repo := repoFullNameFromURL(issue.GetRepositoryURL())
-		if excluded(repo, gh) {
+		if excluded(repo, user, gh) {
 			continue
 		}
 		out = append(out, model.PullRequest{
