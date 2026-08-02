@@ -42,8 +42,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          # Nothing to cache while there are no dependencies.
-          cache: false
+          cache: true
 
       - name: Pin the toolchain
         run: echo "GOTOOLCHAIN=local" >> "$GITHUB_ENV"
@@ -85,8 +84,6 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      # There are no test files yet, so this step and the next pass vacuously
-      # until the first test lands.
       - name: Test (race)
         env:
           # The race detector is implemented in cgo.
