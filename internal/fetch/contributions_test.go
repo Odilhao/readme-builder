@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -75,6 +76,29 @@ func newContribServerWithOpts(t *testing.T, pages [][]event, forks map[string]bo
 		fork := s.forks[r.URL.Path]
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"fork": fork})
+	})
+	s.Server = httptest.NewServer(mux)
+	t.Cleanup(s.Close)
+	return s
+}
+
+// newUserContribServer serves /users/{user}/events/public for an
+// arbitrary, caller-chosen username, unlike newContribServer which is fixed
+// to "octocat". It exists to prove the user argument is actually threaded
+// into the request rather than a username hardcoded somewhere in the call
+// path: every other fixture in this file only ever exercises "octocat".
+func newUserContribServer(t *testing.T, user string, pages [][]event) *contribServer {
+	t.Helper()
+	s := &contribServer{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/users/"+user+"/events/public", func(w http.ResponseWriter, r *http.Request) {
+		s.paths = append(s.paths, r.URL.String())
+		w.Header().Set("Content-Type", "application/json")
+		if len(pages) == 0 {
+			_ = json.NewEncoder(w).Encode([]event{})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(pages[0])
 	})
 	s.Server = httptest.NewServer(mux)
 	t.Cleanup(s.Close)
@@ -159,6 +183,33 @@ func TestContributionsNilSectionMakesNoRequest(t *testing.T) {
 	}
 	if len(srv.paths) != 0 {
 		t.Errorf("observed %d requests, want 0", len(srv.paths))
+	}
+}
+
+// TestContributionsThreadsUserArgumentIntoEventsRequestPath proves the user
+// argument reaches the request URL rather than a hardcoded literal: every
+// other test in this file calls Contributions with "octocat", so a call site
+// that silently substitutes that literal for the user parameter would pass
+// them all and only show up on a different username actually reaching the
+// wire.
+func TestContributionsThreadsUserArgumentIntoEventsRequestPath(t *testing.T) {
+	base := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	pages := [][]event{{ev("PushEvent", "example-org/example-repo", base)}}
+	srv := newUserContribServer(t, "example-user", pages)
+	c := newTestClient(t, srv)
+
+	got, err := Contributions(context.Background(), c, "example-user", ghConfig(10, false, nil, nil))
+	if err != nil {
+		t.Fatalf("Contributions: %v", err)
+	}
+	if len(got) != 1 || got[0].Repo != "example-org/example-repo" {
+		t.Fatalf("got %+v, want one contribution from example-org/example-repo", got)
+	}
+	if len(srv.paths) != 1 {
+		t.Fatalf("got %d requests, want exactly 1 to /users/example-user/events/public", len(srv.paths))
+	}
+	if !strings.HasPrefix(srv.paths[0], "/users/example-user/events/public") {
+		t.Errorf("request path = %q, want prefix /users/example-user/events/public (the user argument must be threaded into the request, not hardcoded)", srv.paths[0])
 	}
 }
 
