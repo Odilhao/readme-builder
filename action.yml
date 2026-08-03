@@ -1,0 +1,78 @@
+name: readme-builder
+description: Render a README from live GitHub activity and RSS feeds
+author: Odilhao
+inputs:
+  config:
+    description: Path to TOML configuration file (relative to repository root)
+    required: false
+  check:
+    description: Validate rendered files match existing content without writing
+    required: false
+    default: 'false'
+  version:
+    description: Print version and exit
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Run readme-builder
+      shell: bash
+      env:
+        VERSION: dev
+      run: |
+        set -e
+
+        # Parse inputs
+        config="${{ inputs.config }}"
+        check="${{ inputs.check }}"
+        version_flag="${{ inputs.version }}"
+
+        # Enforce mutual exclusivity: version is incompatible with config and check
+        if [[ "$version_flag" == "true" ]]; then
+          if [[ -n "$config" ]]; then
+            echo "error: version is mutually exclusive with config" >&2
+            exit 1
+          fi
+          if [[ "$check" == "true" ]]; then
+            echo "error: version is mutually exclusive with check" >&2
+            exit 1
+          fi
+        else
+          # When version is false, config is required
+          if [[ -z "$config" ]]; then
+            echo "error: config is required (unless version=true)" >&2
+            exit 1
+          fi
+        fi
+
+        # Image reference: use VERSION env var (rewritten by release workflow)
+        version="${{ env.VERSION }}"
+        image="ghcr.io/odilhao/readme-builder:$version"
+
+        # Build command arguments
+        args=()
+        if [[ "$version_flag" == "true" ]]; then
+          args+=("-version")
+        else
+          args+=("-config" "$config")
+          if [[ "$check" == "true" ]]; then
+            args+=("-check")
+          fi
+        fi
+
+        # Run container:
+        # - Establish host UID/GID mapping in container namespace (--userns=keep-id)
+        # - Override image's fixed USER 65532 directive to run as host UID (--user)
+        #   * --userns=keep-id alone: UID stays 65532, write fails (Permission denied)
+        #   * --user alone in rootless podman: no UID mapping, write fails
+        #   * Both together: process runs as host UID, writes succeed
+        # - Mount workspace with SELinux relabeling (:z) for SELinux systems, no-op on others
+        # - Set working directory to $GITHUB_WORKSPACE for relative path resolution
+        podman run --rm \
+          --userns=keep-id \
+          --user "$(id -u):$(id -g)" \
+          -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE:z" \
+          -w "$GITHUB_WORKSPACE" \
+          "$image" \
+          "${args[@]}"
