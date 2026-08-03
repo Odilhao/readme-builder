@@ -1,0 +1,211 @@
+name: Release
+
+# This is a SKELETON workflow assembled from pieces built in issue #17 and #18.
+#
+# Issue #17 handles:
+# 1. Version consistency gate: verify action.yml's embedded VERSION matches the tag
+# 2. Rewrite action.yml's VERSION to the pushed tag
+# 3. Move floating v1 tag to v1.x.y releases only
+# 4. Version bumping job (bump-version) that opens the next dev cycle on main
+#
+# Issue #18 will add the build/push/attestation steps into the release job.
+
+on:
+  push:
+    tags:
+      - v[0-9]+.[0-9]+.[0-9]+
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release:
+    name: Release and publish artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write  # For pushing version updates, tags, and creating releases
+      # Note: #18 will add packages: write and id-token: write for ghcr push and attestations
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Release jobs need to commit version updates back to the repo.
+          persist-credentials: true
+
+      # ========== ISSUE #17: Version rewrite and gate ==========
+
+      - name: Sync version - rewrite action.yml and verify consistency
+        run: |
+          set -e
+
+          # Check if action.yml exists (release precondition)
+          if [[ ! -f action.yml ]]; then
+            echo "ERROR: action.yml not found."
+            echo "Release preconditions not met (issue #16 not yet merged)."
+            exit 1
+          fi
+
+          tag="${GITHUB_REF_NAME}"
+
+          # Read current version from action.yml
+          # Structure: .runs.steps[0].env.VERSION
+          # yq -e (exit-status) fails closed: exits non-zero when the path is
+          # absent or resolves to null, instead of returning the literal
+          # string "null" that a plain comparison would miss.
+          if ! current_version=$(yq -e '.runs.steps[0].env.VERSION' action.yml 2>/dev/null); then
+            echo "ERROR: action.yml exists but .runs.steps[0].env.VERSION not found."
+            exit 1
+          fi
+
+          echo "Release tag: $tag"
+          echo "Current action.yml VERSION: $current_version"
+
+          # Rewrite the version in action.yml to match the tag
+          yq -i ".runs.steps[0].env.VERSION = \"$tag\"" action.yml
+
+          # Verify the rewrite succeeded
+          new_version=$(yq '.runs.steps[0].env.VERSION' action.yml)
+          if [[ "$new_version" != "$tag" ]]; then
+            echo "ERROR: Version sync failed. Expected '$tag', got '$new_version'."
+            exit 1
+          fi
+
+          # Commit the version update
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add action.yml
+          git commit -m "chore(release): sync action.yml version to $tag"
+          # Explicit refspec: a tag-push trigger leaves the checkout in
+          # detached HEAD, so a bare "git push" has no branch to push and
+          # fails with "You are not currently on a branch."
+          git push origin HEAD:main
+
+          echo "✓ action.yml synchronized to $tag"
+
+      - name: Move floating v1 tag to this release
+        run: |
+          set -e
+          tag="${GITHUB_REF_NAME}"
+
+          # Only move v1 tag for v1.x.y releases (major version must be 1)
+          # Reject: v2+, malformed tags, pre-release suffixes (-rc1, -alpha, etc.)
+          if [[ ! "$tag" =~ ^v1\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Skipping v1 tag move: tag '$tag' is not a v1.x.y release"
+            exit 0
+          fi
+
+          echo "Moving v1 tag to $tag"
+          git tag -f v1 "$tag"
+          git push origin v1 --force
+          echo "✓ v1 tag moved to $tag"
+
+      # ========== ISSUE #18: Build and release (placeholder) ==========
+
+      # Here, #18 will add:
+      # - Prefetch hermeto cache (reuse from CI build-test artifact OR rebuild)
+      # - Download goreleaser binaries from CI build-binary-reproducibility artifact OR rebuild
+      # - Rebuild binaries with goreleaser to match CI's reproducibility gate
+      # - Build multi-arch image with buildah/buildah-build action
+      # - Push image to ghcr.io
+      # - Sign and push SLSA provenance attestations
+      # - Create GitHub Release with attestations
+
+      # For now (before issue 18), demonstrate that the version gate passes:
+      - name: Placeholder - issue 18 will build and push here
+        run: echo "version gate passed, ready for issue 18 to add release artifacts"
+
+  bump-version:
+    name: Bump version for next development cycle
+    needs: [release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write  # For pushing version bump commits to main
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          # Need full history to ensure push doesn't fail
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Bump VERSION file for next development cycle
+        run: |
+          set -e
+
+          version_file="VERSION"
+
+          if [[ ! -f "$version_file" ]]; then
+            echo "ERROR: $version_file not found."
+            exit 1
+          fi
+
+          # Read current version (format: X.Y.Z.dev0)
+          current=$(cat "$version_file")
+          echo "Current version: $current"
+
+          # Validate shape before touching it. A manually-edited VERSION
+          # (e.g. a leading-zero patch segment like 1.2.08.dev0) must fail
+          # the job loudly here, not corrupt the arithmetic below and push
+          # broken state to main with a contents:write token.
+          if [[ ! "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.dev0$ ]]; then
+            echo "ERROR: VERSION has unexpected format: $current (expected X.Y.Z.dev0)"
+            exit 1
+          fi
+
+          # Strip .dev0 to get the release version
+          release_version="${current%.dev0}"
+          if [[ "$release_version" == "$current" ]]; then
+            echo "ERROR: VERSION does not contain .dev0 suffix: $current"
+            exit 1
+          fi
+
+          echo "Release version: $release_version"
+
+          # Commit the release version (without .dev0)
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          echo "$release_version" > "$version_file"
+          git add "$version_file"
+          git commit -m "chore(release): release $release_version"
+
+          # Parse version to bump patch: X.Y.Z -> X.Y.(Z+1)
+          # Use parameter expansion and arithmetic to bump
+          major_minor="${release_version%.*}"  # X.Y
+          patch="${release_version##*.}"        # Z
+          # Force base-10: bash arithmetic reads a leading-zero segment
+          # (e.g. "08") as an invalid octal literal and errors out. The
+          # format check above already guarantees only digits are here.
+          next_patch=$((10#$patch + 1))
+          next_version="$major_minor.$next_patch"
+
+          echo "$next_version.dev0" > "$version_file"
+          git add "$version_file"
+          git commit -m "chore(release): open development cycle $next_version.dev0"
+
+          echo "✓ Version bumped: $release_version -> $next_version.dev0"
+
+          # Verify the commits only touched VERSION
+          git log --oneline -2 main
+          if [[ $(git diff HEAD~2 --stat | grep -vc "VERSION") -gt 1 ]]; then
+            echo "ERROR: Unexpected file changes in version bump commits."
+            git diff HEAD~2 --stat
+            exit 1
+          fi
+
+          # Push both commits to main. Explicit refspec, safe under
+          # detached HEAD regardless of how this ref was checked out.
+          #
+          # Note: this push is authored with the default GITHUB_TOKEN, so
+          # it does not retrigger other workflows that listen on pushes to
+          # main (e.g. ci.yml) - that's expected GitHub behaviour, not a
+          # bug: actions run by GITHUB_TOKEN don't trigger further
+          # workflow runs, to prevent accidental recursive triggering.
+          git push origin HEAD:main
+          echo "✓ Version bump commits pushed to main"
