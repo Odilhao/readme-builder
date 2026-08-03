@@ -55,19 +55,26 @@ func issueNotPR(number int, title, repoFullName string) searchIssue {
 	}
 }
 
-// searchServer serves /search/issues from a single fixed result set,
+// searchServer serves /search/issues from a set of pages,
 // recording every request's raw query.
 type searchServer struct {
 	*httptest.Server
 
 	queries []url.Values
 	status  int
+	pages   [][]searchIssue
 }
 
 func newSearchServer(t *testing.T, items []searchIssue, status int) *searchServer {
 	t.Helper()
+	return newSearchServerPages(t, [][]searchIssue{items}, status)
+}
 
-	s := &searchServer{status: status}
+// newSearchServerPages serves /search/issues from multiple pages, supporting pagination tests.
+func newSearchServerPages(t *testing.T, pages [][]searchIssue, status int) *searchServer {
+	t.Helper()
+
+	s := &searchServer{status: status, pages: pages}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/search/issues", func(w http.ResponseWriter, r *http.Request) {
 		s.queries = append(s.queries, r.URL.Query())
@@ -75,7 +82,20 @@ func newSearchServer(t *testing.T, items []searchIssue, status int) *searchServe
 			w.WriteHeader(s.status)
 			return
 		}
+		page := 1
+		if p := r.URL.Query().Get("page"); p != "" {
+			fmt.Sscanf(p, "%d", &page)
+		}
 		w.Header().Set("Content-Type", "application/json")
+		if page < 1 || page > len(s.pages) {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"total_count":        0,
+				"incomplete_results": false,
+				"items":              []searchIssue{},
+			})
+			return
+		}
+		items := s.pages[page-1]
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"total_count":        len(items),
 			"incomplete_results": false,
@@ -406,5 +426,164 @@ func TestPullRequestsReturnsErrorFromSearch(t *testing.T) {
 	}
 	if got != nil {
 		t.Errorf("got %+v, want nil result alongside the error", got)
+	}
+}
+
+// TestPullRequestsPagesWhenExcludedReposReduceFirstPage demonstrates the bug
+// fix: when enough items on the first search page are excluded, pagination
+// continues to subsequent pages until Limit is reached or results are exhausted.
+// Without pagination, this test would return fewer than Limit PRs even though
+// plenty of non-excluded PRs exist on the next page.
+func TestPullRequestsPagesWhenExcludedReposReduceFirstPage(t *testing.T) {
+	// First page: 10 results, but 7 are excluded (excluded-org)
+	// So only 3 non-excluded items from first page.
+	// With limit=5, we need to continue to the next page to get 2 more.
+	page1 := []searchIssue{
+		pr(1, "excluded1", "excluded-org/example-repo"),
+		pr(2, "excluded2", "excluded-org/example-repo"),
+		pr(3, "excluded3", "excluded-org/example-repo"),
+		pr(4, "excluded4", "excluded-org/example-repo"),
+		pr(5, "excluded5", "excluded-org/example-repo"),
+		pr(6, "excluded6", "excluded-org/example-repo"),
+		pr(7, "excluded7", "excluded-org/example-repo"),
+		pr(8, "kept1", "example-org/example-repo"),
+		pr(9, "kept2", "example-org/example-repo"),
+		pr(10, "kept3", "example-org/example-repo"),
+	}
+	// Second page: 3 more non-excluded results
+	page2 := []searchIssue{
+		pr(11, "kept4", "example-org/example-repo"),
+		pr(12, "kept5", "example-org/example-repo"),
+		pr(13, "kept6", "example-org/example-repo"),
+	}
+	srv := newSearchServerPages(t, [][]searchIssue{page1, page2}, 0)
+	c := testClient(t, srv.URL)
+
+	gh := prConfig(5)
+	gh.ExcludeOrgs = []string{"excluded-org"}
+	got, err := PullRequests(context.Background(), c, "octocat", gh)
+	if err != nil {
+		t.Fatalf("PullRequests: %v", err)
+	}
+	// Should have exactly 5 results from both pages
+	if len(got) != 5 {
+		t.Errorf("got %d PRs, want 5 (from first and second pages after filtering)", len(got))
+	}
+	// Should have paginated: at least 2 requests (one per page)
+	if len(srv.queries) < 2 {
+		t.Errorf("observed %d /search/issues requests, want at least 2 (must page when first page is mostly excluded)", len(srv.queries))
+	}
+	// Verify we got the right PRs
+	want := []int{8, 9, 10, 11, 12}
+	for i, pr := range got {
+		if pr.Number != want[i] {
+			t.Errorf("got PR #%d at position %d, want #%d", pr.Number, i, want[i])
+		}
+	}
+}
+
+// TestPullRequestsStopsAtLimitWithoutFetchingExtraPages verifies that once Limit
+// is reached, no further pages are requested. Uses a full-length first page so
+// only the limit check, not a short-page break, stops the loop.
+func TestPullRequestsStopsAtLimitWithoutFetchingExtraPages(t *testing.T) {
+	// Generate a full page (10 items at limit=5 means perPage=10)
+	page1 := []searchIssue{
+		pr(1, "one", "example-org/example-repo"),
+		pr(2, "two", "example-org/example-repo"),
+		pr(3, "three", "example-org/example-repo"),
+		pr(4, "four", "example-org/example-repo"),
+		pr(5, "five", "example-org/example-repo"),
+		pr(6, "six", "example-org/example-repo"),
+		pr(7, "seven", "example-org/example-repo"),
+		pr(8, "eight", "example-org/example-repo"),
+		pr(9, "nine", "example-org/example-repo"),
+		pr(10, "ten", "example-org/example-repo"),
+	}
+	page2 := []searchIssue{
+		pr(11, "extra", "example-org/example-repo"),
+	}
+	srv := newSearchServerPages(t, [][]searchIssue{page1, page2}, 0)
+	c := testClient(t, srv.URL)
+
+	got, err := PullRequests(context.Background(), c, "octocat", prConfig(5))
+	if err != nil {
+		t.Fatalf("PullRequests: %v", err)
+	}
+	if len(got) != 5 {
+		t.Fatalf("got %d PRs, want 5", len(got))
+	}
+	if len(srv.queries) != 1 {
+		t.Errorf("observed %d requests, want 1 (must stop once Limit is reached)", len(srv.queries))
+	}
+}
+
+// TestPullRequestsStopsPaginatingOnShortPage verifies that pagination stops
+// when a short page is received, even if Limit has not been reached yet.
+func TestPullRequestsStopsPaginatingOnShortPage(t *testing.T) {
+	page1 := []searchIssue{
+		pr(1, "only", "example-org/example-repo"),
+	}
+	srv := newSearchServerPages(t, [][]searchIssue{page1}, 0)
+	c := testClient(t, srv.URL)
+
+	got, err := PullRequests(context.Background(), c, "octocat", prConfig(10))
+	if err != nil {
+		t.Fatalf("PullRequests: %v", err)
+	}
+	if len(got) != 1 {
+		t.Errorf("got %d PRs, want 1", len(got))
+	}
+	if len(srv.queries) != 1 {
+		t.Errorf("observed %d requests, want 1 (short page must stop pagination)", len(srv.queries))
+	}
+}
+
+// TestPullRequestsBoundedByMaxSearchPages verifies that pagination is bounded by
+// maxSearchPages, never requesting more than that many pages even if Limit is not
+// yet reached. This test isolates the maxSearchPages bound: limit is set high
+// enough (1000) that it cannot be satisfied by 3 pages of 100 items (300 total).
+// If the function stops after exactly 3 requests with 300 results, it must be due
+// to the maxSearchPages bound, not due to reaching limit. This test would fail if
+// maxSearchPages were removed or set much higher.
+func TestPullRequestsBoundedByMaxSearchPages(t *testing.T) {
+	// Create many full pages of 100 items each (matching maxSearchPerPage),
+	// well beyond maxSearchPages.
+	genPage := func(pageNum int) []searchIssue {
+		items := make([]searchIssue, 100)
+		for i := range items {
+			prNum := pageNum*100 + i + 1
+			items[i] = pr(prNum, fmt.Sprintf("pr%d", prNum), "example-org/example-repo")
+		}
+		return items
+	}
+	pages := [][]searchIssue{
+		genPage(0),
+		genPage(1),
+		genPage(2),
+		genPage(3),
+		genPage(4),
+	}
+	srv := newSearchServerPages(t, pages, 0)
+	c := testClient(t, srv.URL)
+
+	// Request limit=1000: with perPage=100, we would need 10 full pages to satisfy
+	// this limit. maxSearchPages=3, so the function should stop after 3 pages due to
+	// the bound, returning 300 items (3*100) which is less than the requested 1000.
+	// This proves we stopped due to the page bound, not because limit happened to be
+	// satisfied. If the maxSearchPages constant were removed/increased, the function
+	// would continue paging past 3 requests, failing both assertions below.
+	got, err := PullRequests(context.Background(), c, "octocat", prConfig(1000))
+	if err != nil {
+		t.Fatalf("PullRequests: %v", err)
+	}
+	// Should have made exactly 3 requests (limited by maxSearchPages), not more.
+	if len(srv.queries) != 3 {
+		t.Errorf("observed %d requests, want exactly 3 (maxSearchPages bound must stop pagination, not limit)", len(srv.queries))
+	}
+	// Should have collected 300 items (3 full pages of 100 each), which is less than
+	// the requested limit of 1000. This proves we stopped due to the page bound.
+	wantResults := 300 // 3 pages * 100 items/page
+	if len(got) != wantResults {
+		t.Errorf("got %d PRs, want %d (stopped by maxSearchPages bound, not by reaching limit)", len(got), wantResults)
 	}
 }
