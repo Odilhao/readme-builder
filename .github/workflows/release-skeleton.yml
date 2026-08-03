@@ -217,17 +217,17 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Attest source tarball provenance
-        uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: dist/readme-builder-${{ github.ref_name }}-source.tar.gz
 
       - name: Attest release binaries via checksums
-        uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-checksums: dist/checksums.txt
 
       - name: Attest image provenance
-        uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-digest: ${{ steps.push.outputs.digest }}
           subject-name: ${{ steps.build.outputs.image }}
