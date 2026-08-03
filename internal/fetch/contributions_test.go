@@ -166,7 +166,17 @@ func ghConfig(limit int, excludeForks bool, excludeRepos, excludeOrgs []string) 
 		ExcludeForks:  excludeForks,
 		ExcludeRepos:  excludeRepos,
 		ExcludeOrgs:   excludeOrgs,
-		Contributions: &config.Section{Limit: limit},
+		Contributions: &config.Section{Limit: limit, TimeWindow: "30d"},
+	}
+}
+
+// contrib builds a Contribution with URLs constructed from repo name and login.
+func contrib(repo string, events int, login string) model.Contribution {
+	return model.Contribution{
+		Repo:        repo,
+		Events:      events,
+		CommitsURL:  "https://github.com/" + repo + "/commits?author=" + login,
+		ActivityURL: "https://github.com/" + repo + "/issues?q=updated:30d+author:" + login,
 	}
 }
 
@@ -228,7 +238,7 @@ func TestContributionsFiltersNonWorkEventTypes(t *testing.T) {
 		t.Fatalf("Contributions: %v", err)
 	}
 
-	want := []model.Contribution{{Repo: "example-org/example-repo", Events: 1}}
+	want := []model.Contribution{contrib("example-org/example-repo", 1, "octocat")}
 	if len(got) != 1 || got[0] != want[0] {
 		t.Errorf("got %+v, want %+v", got, want)
 	}
@@ -349,7 +359,7 @@ func TestContributionsKeepsEveryContributionShapedEventType(t *testing.T) {
 		t.Fatalf("got %d contributions, want %d (one per contribution-shaped type): %+v", len(got), len(types), got)
 	}
 	for i := range types {
-		want := model.Contribution{Repo: fmt.Sprintf("example-org/repo-%d", i), Events: 1}
+		want := contrib(fmt.Sprintf("example-org/repo-%d", i), 1, "octocat")
 		found := false
 		for _, c := range got {
 			if c == want {
@@ -541,7 +551,7 @@ func TestContributionsAccumulatesEventsAcrossPages(t *testing.T) {
 
 	// Limit=1 keeps only the most-recently-active repo, which is busy-repo
 	// (its page-two event is the newest), collapsed into a single entry.
-	want := model.Contribution{Repo: "example-org/busy-repo", Events: 3}
+	want := contrib("example-org/busy-repo", 3, "octocat")
 	if len(got) != 1 || got[0] != want {
 		t.Errorf("got %+v, want [%+v]", got, want)
 	}
@@ -695,8 +705,8 @@ func TestContributionsKeepsEventWithSlashlessRepoName(t *testing.T) {
 	}
 
 	want := []model.Contribution{
-		{Repo: "no-slash-name", Events: 1},
-		{Repo: "example-org/example-repo", Events: 1},
+		contrib("no-slash-name", 1, "octocat"),
+		contrib("example-org/example-repo", 1, "octocat"),
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %+v, want %+v", got, want)

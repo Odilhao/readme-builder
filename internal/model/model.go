@@ -30,11 +30,13 @@ type GitHub struct {
 }
 
 type Contribution struct {
-	Repo string `json:"repo"`
+	Repo        string `json:"repo"`
+	Events      int    `json:"events"`
+	CommitsURL  string `json:"commits_url"`
+	ActivityURL string `json:"activity_url"`
 	// Events counts observed events per repo from GET /users/{u}/events/public.
 	// That API retains only ~90 days and 300 events, so this is a floor, not
 	// a lifetime total.
-	Events int `json:"events"`
 }
 
 type Repo struct {

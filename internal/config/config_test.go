@@ -56,9 +56,9 @@ func TestLoadValid(t *testing.T) {
 		ExcludeForks:  true,
 		ExcludeRepos:  []string{"example-org/example-repo", "octocat/another-example"},
 		ExcludeOrgs:   []string{"example-org"},
-		Contributions: &Section{Limit: 0},
-		Repos:         &Section{Limit: 3},
-		Stars:         &Section{Limit: DefaultSectionLimit},
+		Contributions: &Section{Limit: 0, TimeWindow: "30d"},
+		Repos:         &Section{Limit: 3, TimeWindow: ""},
+		Stars:         &Section{Limit: DefaultSectionLimit, TimeWindow: ""},
 	}
 	if !reflect.DeepEqual(cfg.GitHub, wantGitHub) {
 		t.Errorf("GitHub:\n got %+v\nwant %+v", cfg.GitHub, wantGitHub)
@@ -120,14 +120,14 @@ func TestEverySectionIsWired(t *testing.T) {
 	gh := load(t, "all_sections.toml").GitHub
 
 	want := GitHub{
-		Contributions: &Section{Limit: 1},
-		Repos:         &Section{Limit: 2},
-		Forks:         &Section{Limit: 3},
-		PullRequests:  &Section{Limit: 4},
-		Stars:         &Section{Limit: 5},
-		Releases:      &Section{Limit: 6},
-		Followers:     &Section{Limit: 7},
-		Gists:         &Section{Limit: 8},
+		Contributions: &Section{Limit: 1, TimeWindow: "30d"},
+		Repos:         &Section{Limit: 2, TimeWindow: ""},
+		Forks:         &Section{Limit: 3, TimeWindow: ""},
+		PullRequests:  &Section{Limit: 4, TimeWindow: ""},
+		Stars:         &Section{Limit: 5, TimeWindow: ""},
+		Releases:      &Section{Limit: 6, TimeWindow: ""},
+		Followers:     &Section{Limit: 7, TimeWindow: ""},
+		Gists:         &Section{Limit: 8, TimeWindow: ""},
 	}
 	if !reflect.DeepEqual(gh, want) {
 		t.Errorf("GitHub:\n got %s\nwant %s", formatSections(gh), formatSections(want))
@@ -277,6 +277,38 @@ func TestFeedNamesAccepted(t *testing.T) {
 func TestMissingFile(t *testing.T) {
 	if _, err := Load(filepath.Join("testdata", "does-not-exist.toml")); err == nil {
 		t.Fatal("Load: got nil error for a missing file")
+	}
+}
+
+// Contributions time_window parsing: valid values (3d, 2w, 1y), invalid suffixes, and absence defaults.
+func TestContributionsTimeWindowParsing(t *testing.T) {
+	tests := []struct {
+		name    string
+		fixture string
+		want    string
+		wantErr bool
+	}{
+		{"valid 7d", "contributions_time_window_valid.toml", "7d", false},
+		{"valid 2w", "contributions_time_window_valid_weeks.toml", "2w", false},
+		{"valid 1y", "contributions_time_window_valid_years.toml", "1y", false},
+		{"invalid suffix", "contributions_time_window_invalid.toml", "", true},
+		{"absent uses default", "contributions_time_window_absent.toml", "30d", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.wantErr {
+				got := loadErr(t, tt.fixture)
+				wantContains(t, got, "time_window", "invalid")
+			} else {
+				cfg := load(t, tt.fixture)
+				if cfg.GitHub.Contributions == nil {
+					t.Fatal("github.contributions: got nil, want a section")
+				}
+				if cfg.GitHub.Contributions.TimeWindow != tt.want {
+					t.Errorf("TimeWindow: got %q, want %q", cfg.GitHub.Contributions.TimeWindow, tt.want)
+				}
+			}
+		})
 	}
 }
 
