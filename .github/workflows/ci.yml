@@ -364,3 +364,16 @@ jobs:
             --volume ${{ github.workspace }}/hermeto-output:/tmp/hermeto-output:Z
             --volume ${{ github.workspace }}/hermeto.env:/tmp/hermeto.env:Z
             --network=none
+            --build-arg VERSION=ci-test-version
+
+      - name: Assert the image reports the build-arg version
+        # Regression check for the release image always reporting "dev" (issue #43):
+        # the release workflow passes the git tag through this same build-arg.
+        run: |
+          set -euo pipefail
+          got="$(podman run --rm "${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" -version)"
+          want="readme-builder version ci-test-version"
+          if [ "$got" != "$want" ]; then
+            echo "::error::expected '$want', got '$got'"
+            exit 1
+          fi
