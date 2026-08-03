@@ -1,0 +1,27 @@
+version: 2
+updates:
+  # Go module dependencies: group minor and patch updates into one PR.
+  # Major version bumps are handled separately (not grouped).
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions workflow pins (covers .github/workflows/*).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Docker base images (Containerfile at repo root).
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
