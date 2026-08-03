@@ -188,7 +188,7 @@ jobs:
             "ghcr.io/hermetoproject/hermeto@sha256:bc33ceb313fc291736f546dc3bfad383d640cea8cb24e3f0d266686bdfa99d16" \
             generate-env \
             ./hermeto-output \
-            -o ./hermeto.env.container \
+            -o ./hermeto-container.env \
             --for-output-dir /tmp/hermeto-output
           echo "✓ Container hermeto.env generated"
 
@@ -202,7 +202,7 @@ jobs:
           containerfiles: ./Containerfile
           extra-args: |
             --volume ${{ github.workspace }}/hermeto-output:/tmp/hermeto-output:Z
-            --volume ${{ github.workspace }}/hermeto.env.container:/tmp/hermeto.env:Z
+            --volume ${{ github.workspace }}/hermeto-container.env:/tmp/hermeto.env:Z
             --network=none
             --build-arg VERSION=${{ github.ref_name }}
 
