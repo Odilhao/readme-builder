@@ -91,6 +91,14 @@ jobs:
 
           echo "✓ action.yml synchronized to $tag"
 
+      - name: Retag release to version-synced commit
+        run: |
+          set -e
+          tag="${GITHUB_REF_NAME}"
+          git tag -f "$tag" HEAD
+          git push origin "$tag" --force
+          echo "✓ Release tag moved to version-synced commit"
+
       - name: Move floating v1 tag to this release
         run: |
           set -e
@@ -410,43 +418,25 @@ jobs:
             exit 1
           fi
 
-          # Read current version (format: X.Y.Z.dev0)
-          current=$(cat "$version_file")
-          echo "Current version: $current"
-
-          # Validate shape before touching it. A manually-edited VERSION
-          # (e.g. a leading-zero patch segment like 1.2.08.dev0) must fail
-          # the job loudly here, not corrupt the arithmetic below and push
-          # broken state to main with a contents:write token.
-          if [[ ! "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.dev0$ ]]; then
-            echo "ERROR: VERSION has unexpected format: $current (expected X.Y.Z.dev0)"
-            exit 1
-          fi
-
-          # Strip .dev0 to get the release version
-          release_version="${current%.dev0}"
-          if [[ "$release_version" == "$current" ]]; then
-            echo "ERROR: VERSION does not contain .dev0 suffix: $current"
-            exit 1
-          fi
-
-          echo "Release version: $release_version"
+          # Derive version from the tag that triggered this release
+          tag="${GITHUB_REF_NAME}"        # e.g. v1.0.0
+          version="${tag#v}"              # 1.0.0
+          echo "Released version: $version"
 
           # Commit the release version (without .dev0)
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          echo "$release_version" > "$version_file"
+          echo "$version" > "$version_file"
           git add "$version_file"
-          git commit -m "chore(release): release $release_version"
+          git commit -m "chore(release): release $version"
 
           # Parse version to bump patch: X.Y.Z -> X.Y.(Z+1)
           # Use parameter expansion and arithmetic to bump
-          major_minor="${release_version%.*}"  # X.Y
-          patch="${release_version##*.}"        # Z
+          major_minor="${version%.*}"  # X.Y
+          patch="${version##*.}"        # Z
           # Force base-10: bash arithmetic reads a leading-zero segment
-          # (e.g. "08") as an invalid octal literal and errors out. The
-          # format check above already guarantees only digits are here.
+          # (e.g. "08") as an invalid octal literal and errors out.
           next_patch=$((10#$patch + 1))
           next_version="$major_minor.$next_patch"
 
@@ -454,7 +444,7 @@ jobs:
           git add "$version_file"
           git commit -m "chore(release): open development cycle $next_version.dev0"
 
-          echo "✓ Version bumped: $release_version -> $next_version.dev0"
+          echo "✓ Version bumped: $version -> $next_version.dev0"
 
           # Verify the commits only touched VERSION
           git log --oneline -2 main
