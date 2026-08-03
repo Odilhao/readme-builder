@@ -34,5 +34,18 @@ builds:
     mod_timestamp: '{{ .Env.SOURCE_DATE_EPOCH }}'
     # GoReleaser runs in the build environment; hermeto.env sets GOPROXY/GOMODCACHE.
 
+archives:
+  - id: release-archives
+    files:
+      - LICENSE
+    formats:
+      - tar.gz
+    name_template: "{{ .Binary }}_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: false
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
 # No release or publish stages: this issue (#15) is build config only.
-# Release automation (#16/#17/#18) will add the push, attestations, and tag gates.
+# Release automation (#17/#18) adds push, version consistency, attestations, and tag gates.
