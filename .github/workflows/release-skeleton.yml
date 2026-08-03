@@ -27,8 +27,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write  # For pushing version updates, tags, and creating releases
-      # Note: #18 will add packages: write and id-token: write for ghcr push and attestations
+      contents: write      # For pushing version updates, tags, and creating releases
+      packages: write      # For pushing image to ghcr.io
+      id-token: write      # For generating OIDC token to sign attestations
+      attestations: write  # For creating provenance and SBOM attestations
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -103,20 +105,173 @@ jobs:
           git push origin v1 --force
           echo "✓ v1 tag moved to $tag"
 
-      # ========== ISSUE #18: Build and release (placeholder) ==========
+      # ========== ISSUE #18: Build, push, and attest ==========
 
-      # Here, #18 will add:
-      # - Prefetch hermeto cache (reuse from CI build-test artifact OR rebuild)
-      # - Download goreleaser binaries from CI build-binary-reproducibility artifact OR rebuild
-      # - Rebuild binaries with goreleaser to match CI's reproducibility gate
-      # - Build multi-arch image with buildah/buildah-build action
-      # - Push image to ghcr.io
-      # - Sign and push SLSA provenance attestations
-      # - Create GitHub Release with attestations
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
 
-      # For now (before issue 18), demonstrate that the version gate passes:
-      - name: Placeholder - issue 18 will build and push here
-        run: echo "version gate passed, ready for issue 18 to add release artifacts"
+      - name: Pin the toolchain
+        run: echo "GOTOOLCHAIN=local" >> "$GITHUB_ENV"
+
+      - name: Set up goreleaser
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+        with:
+          install-only: true
+
+      - name: Prefetch dependencies with hermeto
+        run: bash .github/scripts/prefetch-deps.sh
+
+      - name: Regenerate hermeto.env for bare runner paths
+        # The prefetch script generates hermeto.env with host paths.
+        # We need to keep it as-is since we're building on the bare runner.
+        run: |
+          set -euo pipefail
+          # Verify hermeto cache was created
+          [ -d hermeto-output ] || { echo "ERROR: hermeto-output directory not found"; exit 1; }
+          [ -f hermeto.env ] || { echo "ERROR: hermeto.env not found"; exit 1; }
+          echo "✓ Hermeto cache ready"
+
+      - name: Derive SOURCE_DATE_EPOCH from tag commit
+        run: |
+          set -euo pipefail
+          # Use the tag's commit date for reproducible builds.
+          tag_commit=$(git rev-list -n 1 "$GITHUB_REF")
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct "$tag_commit")
+          echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" >> "$GITHUB_ENV"
+          echo "Release tag commit: $tag_commit"
+          echo "Using SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
+
+      - name: Build release binaries with goreleaser
+        env:
+          GOFLAGS: -mod=readonly
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          source ./hermeto.env
+          goreleaser release --clean --skip=validate,publish,announce
+          echo "✓ Binaries and checksums built"
+          ls -lh dist/
+
+      - name: Create source tarball from tag
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          tarball="readme-builder-${tag}-source.tar.gz"
+          mkdir -p dist
+          git archive \
+            --format=tar.gz \
+            --prefix="readme-builder-${tag}/" \
+            -o "dist/${tarball}" \
+            "$tag"
+          echo "✓ Source tarball created"
+          ls -lh "dist/${tarball}"
+
+      - name: Install QEMU for multi-arch builds
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y qemu-user-static
+
+      - name: Regenerate hermeto.env for container mount paths
+        # The hermeto.env was generated for the bare runner.
+        # Container builds need /tmp/hermeto-output, so regenerate with that path.
+        run: |
+          set -euo pipefail
+          podman run --rm \
+            -v "$PWD:$PWD:z" \
+            -w "$PWD" \
+            "ghcr.io/hermetoproject/hermeto@sha256:bc33ceb313fc291736f546dc3bfad383d640cea8cb24e3f0d266686bdfa99d16" \
+            generate-env \
+            ./hermeto-output \
+            -o ./hermeto.env.container \
+            --for-output-dir /tmp/hermeto-output
+          echo "✓ Container hermeto.env generated"
+
+      - name: Build multi-arch image with buildah
+        id: build
+        uses: redhat-actions/buildah-build@7a95fa7ee0f02d552a32753e7414641a04307056 # v2.13
+        with:
+          image: ghcr.io/odilhao/readme-builder
+          tags: ${{ github.ref_name }}
+          platforms: linux/amd64, linux/arm64
+          containerfiles: ./Containerfile
+          extra-args: |
+            --volume ${{ github.workspace }}/hermeto-output:/tmp/hermeto-output:Z
+            --volume ${{ github.workspace }}/hermeto.env.container:/tmp/hermeto.env:Z
+            --network=none
+
+      - name: Push image to ghcr.io
+        id: push
+        uses: redhat-actions/push-to-registry@5860fc963bf8f2b3221773a023141612f010c469 # v2
+        with:
+          image: ${{ steps.build.outputs.image }}
+          tags: ${{ steps.build.outputs.tags }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest source tarball provenance
+        uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1
+        with:
+          subject-path: dist/readme-builder-${{ github.ref_name }}-source.tar.gz
+
+      - name: Attest release binaries via checksums
+        uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1
+        with:
+          subject-checksums: dist/checksums.txt
+
+      - name: Attest image provenance
+        uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1
+        with:
+          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-name: ${{ steps.build.outputs.image }}
+          push-to-registry: true
+
+      - name: Generate image SBOM and attest
+        run: |
+          set -euo pipefail
+
+          # Install syft for SBOM generation if not present
+          if ! command -v syft &> /dev/null; then
+            echo "Installing syft..."
+            curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          fi
+
+          image="${{ steps.build.outputs.image }}"
+          sbom_file="sbom-${{ github.ref_name }}.cyclonedx.json"
+
+          echo "Generating CycloneDX SBOM for: $image"
+          syft "$image" -o cyclonedx-json > "$sbom_file"
+          echo "✓ SBOM generated: $sbom_file"
+
+          # Move to dist for release asset collection
+          mkdir -p dist
+          mv "$sbom_file" "dist/$sbom_file"
+
+      - name: Attest image SBOM
+        uses: actions/attest-sbom@5026d3663739160db546203eeaffa6aa1c51a4d6 # v1
+        with:
+          sbom-path: dist/sbom-${{ github.ref_name }}.cyclonedx.json
+          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-name: ${{ steps.build.outputs.image }}
+          push-to-registry: true
+
+      - name: Create GitHub release
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+
+          # Create the release with generated changelog notes
+          gh release create "$tag" \
+            dist/readme-builder-${tag}-source.tar.gz \
+            dist/checksums.txt \
+            dist/sbom-${tag}.cyclonedx.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --generate-notes
+
+          echo "✓ GitHub release created: $tag"
 
   bump-version:
     name: Bump version for next development cycle
