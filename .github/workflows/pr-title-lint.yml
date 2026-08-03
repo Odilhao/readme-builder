@@ -38,7 +38,15 @@ jobs:
           # type must start with a lowercase letter, followed by alphanumeric/hyphen
           # scope is optional, alphanumeric/hyphen
           # description is required and non-empty
-          if [[ ! "$pr_title" =~ ^[a-z]+(-[a-z0-9]+)*(\([a-z0-9]+(-[a-z0-9]+)*\))?: .+ ]]; then
+          #
+          # Held in a variable rather than inlined: bash's own [[ ]] parser
+          # (not the regex engine) trips over the unescaped parens once
+          # they're mixed with the escaped literal \( \) for the scope,
+          # raising "syntax error in conditional expression" before the
+          # pattern is ever evaluated. A variable RHS is a single word, so
+          # the parser never re-tokenizes it.
+          pattern='^[a-z]+(-[a-z0-9]+)*(\([a-z0-9]+(-[a-z0-9]+)*\))?: .+'
+          if [[ ! "$pr_title" =~ $pattern ]]; then
             echo "❌ PR title does not follow Conventional Commits format"
             echo ""
             echo "Expected format:"
