@@ -37,6 +37,9 @@ jobs:
         with:
           # Release jobs need to commit version updates back to the repo.
           persist-credentials: true
+          # Full history + tags required for git describe to find previous tags
+          # for the release notes tag range calculation. Shallow clones will fail.
+          fetch-depth: 0
 
       # ========== ISSUE #17: Version rewrite and gate ==========
 
@@ -263,15 +266,112 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
+          repo="$GITHUB_REPOSITORY"
+          image="${{ steps.build.outputs.image }}"
+          digest="${{ steps.push.outputs.digest }}"
 
-          # Create the release with generated changelog notes
+          # Find the previous tag for the tag range
+          # Use git describe to find the most recent tag before this one
+          previous_tag=""
+          if git describe --tags --abbrev=0 "${tag}^" &>/dev/null; then
+            previous_tag=$(git describe --tags --abbrev=0 "${tag}^")
+          fi
+
+          # Build release body from multiple sections
+          body_file=$(mktemp)
+          {
+            # Section 1: PR-categorized notes via generate-notes
+            if [[ -n "$previous_tag" ]]; then
+              echo "## What's Changed"
+              echo ""
+              gh api "repos/${repo}/releases/generate-notes" \
+                -f tag_name="$tag" \
+                -f previous_tag_name="$previous_tag" \
+                -f target_commitish="main" \
+                --jq '.body' || echo ""
+              echo ""
+            fi
+
+            # Section 2: Commits without a PR (git log --no-merges)
+            if [[ -n "$previous_tag" ]]; then
+              commit_count=$(git log --no-merges --pretty=format:"%H" "${previous_tag}..${tag}" | wc -l)
+            else
+              commit_count=$(git log --no-merges --pretty=format:"%H" "${tag}" | wc -l)
+            fi
+
+            if [[ $commit_count -gt 0 ]]; then
+              echo "## Commits without a PR"
+              echo ""
+              if [[ -n "$previous_tag" ]]; then
+                git log --no-merges --pretty="- %s (%h)" "${previous_tag}..${tag}"
+              else
+                git log --no-merges --pretty="- %s (%h)" "${tag}"
+              fi
+              echo ""
+            fi
+
+            # Section 3: Closed issues in the tag range
+            echo "## Closed Issues"
+            echo ""
+            if [[ -n "$previous_tag" ]]; then
+              # Get dates for the tag range
+              prev_date=$(git log -1 --format=%ci "$previous_tag" | cut -d' ' -f1)
+              curr_date=$(git log -1 --format=%ci "$tag" | cut -d' ' -f1)
+              # Query closed issues between the tag dates
+              gh issue list --repo "$repo" \
+                --state closed \
+                --search "closed:${prev_date}..${curr_date}" \
+                --limit 1000 \
+                --json number,title \
+                --template '{{range .}}{{.number}} - {{.title}}{{"\n"}}{{end}}' || echo "No closed issues found."
+            fi
+            echo ""
+
+            # Section 4: Image digests and attestation verification
+            echo "## Image Digests (Immutable References)"
+            echo ""
+            echo "Multi-architecture container image (linux/amd64, linux/arm64):"
+            echo ""
+            echo "\`${image}@${digest}\`"
+            echo ""
+            echo "## Attestation Verification"
+            echo ""
+            echo "Verify the image provenance and signature:"
+            echo ""
+            echo "\`\`\`bash"
+            echo "gh attestation verify oci://${image}:${tag} --repo ${repo}"
+            echo "\`\`\`"
+            echo ""
+            echo "Verify source tarball provenance:"
+            echo ""
+            echo "\`\`\`bash"
+            echo "gh attestation verify readme-builder-${tag}-source.tar.gz --repo ${repo}"
+            echo "\`\`\`"
+            echo ""
+            echo "Verify release binary checksums provenance:"
+            echo ""
+            echo "\`\`\`bash"
+            echo "gh attestation verify readme-builder_linux_amd64.tar.gz --repo ${repo}"
+            echo "gh attestation verify readme-builder_linux_arm64.tar.gz --repo ${repo}"
+            echo "\`\`\`"
+            echo ""
+            echo "Verify SBOM provenance:"
+            echo ""
+            echo "\`\`\`bash"
+            echo "gh attestation verify --predicate-type cyclonedx oci://${image}:${tag} --repo ${repo}"
+            echo "\`\`\`"
+          } > "$body_file"
+
+          # Create the release with the assembled body
           gh release create "$tag" \
             dist/readme-builder-${tag}-source.tar.gz \
             dist/checksums.txt \
             dist/sbom-${tag}.cyclonedx.json \
-            --repo "$GITHUB_REPOSITORY" \
-            --generate-notes
+            --repo "$repo" \
+            --title "$tag" \
+            --notes-file "$body_file"
 
+          rm -f "$body_file"
           echo "✓ GitHub release created: $tag"
 
   bump-version:

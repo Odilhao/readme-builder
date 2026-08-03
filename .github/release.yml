@@ -1,0 +1,32 @@
+changelog:
+  categories:
+    - title: Features
+      labels:
+        - 'type: feature'
+        - 'type: feat'
+        - enhancement
+    - title: Bug Fixes
+      labels:
+        - 'type: fix'
+        - bug
+    - title: Build & Packaging
+      labels:
+        - 'type: build'
+        - 'area: packaging'
+        - docker
+    - title: CI & Automation
+      labels:
+        - 'type: ci'
+        - 'area: ci'
+        - github_actions
+    - title: Supply Chain & Attestations
+      labels:
+        - 'area: supply-chain'
+    - title: Documentation
+      labels:
+        - 'type: docs'
+        - documentation
+        - 'area: docs'
+    - title: Other Changes
+      labels:
+        - dependencies
