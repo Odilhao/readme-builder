@@ -1,0 +1,67 @@
+name: Lint PR Title
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint-pr-title:
+    name: Lint PR title against Conventional Commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -e
+
+          # Get PR title from environment (passed securely, not inline)
+          pr_title="$PR_TITLE"
+
+          # Conventional Commits format: type(scope): description
+          # Allowed types: feat, fix, ci, build, docs, refactor, perf, chore, test, revert
+          # Scope is optional
+          # Examples:
+          #   feat(fetch): derive contributions from public events
+          #   fix(render): drop dangling separator on empty description
+          #   ci: pin actions to commit shas
+          #   chore: update dependencies
+
+          # Regex pattern: type(scope): description OR type: description
+          # type must start with a lowercase letter, followed by alphanumeric/hyphen
+          # scope is optional, alphanumeric/hyphen
+          # description is required and non-empty
+          #
+          # Held in a variable rather than inlined: bash's own [[ ]] parser
+          # (not the regex engine) trips over the unescaped parens once
+          # they're mixed with the escaped literal \( \) for the scope,
+          # raising "syntax error in conditional expression" before the
+          # pattern is ever evaluated. A variable RHS is a single word, so
+          # the parser never re-tokenizes it.
+          pattern='^[a-z]+(-[a-z0-9]+)*(\([a-z0-9]+(-[a-z0-9]+)*\))?: .+'
+          if [[ ! "$pr_title" =~ $pattern ]]; then
+            echo "❌ PR title does not follow Conventional Commits format"
+            echo ""
+            echo "Expected format:"
+            echo "  type(scope): description"
+            echo "  type: description"
+            echo ""
+            echo "Allowed types: feat, fix, ci, build, docs, refactor, perf, chore, test, revert"
+            echo ""
+            echo "Examples:"
+            echo "  feat(fetch): derive contributions from public events"
+            echo "  fix(render): drop dangling separator on empty description"
+            echo "  ci: pin actions to commit shas"
+            echo ""
+            echo "Got: '$pr_title'"
+            exit 1
+          fi
+
+          echo "✓ PR title follows Conventional Commits format: '$pr_title'"
