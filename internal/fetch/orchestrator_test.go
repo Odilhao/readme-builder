@@ -76,6 +76,65 @@ func newOrchestratorServer(t *testing.T) *orchestratorServer {
 		_ = json.NewEncoder(w).Encode(result)
 	})
 
+	// GET /users/{u}/starred for starred repositories
+	mux.HandleFunc("/users/octocat/starred", func(w http.ResponseWriter, r *http.Request) {
+		s.requestedPaths = append(s.requestedPaths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		base := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+		pushed := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+		starred := []starItem{{
+			StarredAt: base,
+			Repo: repoItem{
+				Name:     "starred-repo",
+				FullName: "example-org/starred-repo",
+				Fork:     false,
+				PushedAt: pushed,
+				HTMLURL:  "https://github.com/example-org/starred-repo",
+			},
+		}}
+		_ = json.NewEncoder(w).Encode(starred)
+	})
+
+	// GET /users/{u}/followers for followers
+	mux.HandleFunc("/users/octocat/followers", func(w http.ResponseWriter, r *http.Request) {
+		s.requestedPaths = append(s.requestedPaths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		followers := []followerItem{{
+			Login:     "example-user",
+			AvatarURL: "https://avatars.githubusercontent.com/u/1?v=4",
+			HTMLURL:   "https://github.com/example-user",
+		}}
+		_ = json.NewEncoder(w).Encode(followers)
+	})
+
+	// GET /users/{u}/gists for gists
+	mux.HandleFunc("/users/octocat/gists", func(w http.ResponseWriter, r *http.Request) {
+		s.requestedPaths = append(s.requestedPaths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		base := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+		gists := []gistItem{{
+			ID:          "gist123",
+			URL:         "https://gist.github.com/octocat/gist123",
+			Description: "my first gist",
+			CreatedAt:   base,
+		}}
+		_ = json.NewEncoder(w).Encode(gists)
+	})
+
+	// GET /repos/{owner}/{repo}/releases for releases
+	mux.HandleFunc("/repos/octocat/Hello-World/releases", func(w http.ResponseWriter, r *http.Request) {
+		s.requestedPaths = append(s.requestedPaths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		base := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+		releases := []releaseItem{{
+			TagName:     "v1.0.0",
+			Name:        "Release 1.0.0",
+			HTMLURL:     "https://github.com/octocat/Hello-World/releases/tag/v1.0.0",
+			PublishedAt: base,
+		}}
+		_ = json.NewEncoder(w).Encode(releases)
+	})
+
 	// Feed endpoint (simple RSS)
 	mux.HandleFunc("/feed", func(w http.ResponseWriter, r *http.Request) {
 		s.requestedPaths = append(s.requestedPaths, r.URL.Path)
@@ -110,6 +169,10 @@ func TestFetchAllSectionsPresent(t *testing.T) {
 			Repos:         &config.Section{Limit: 10},
 			Forks:         &config.Section{Limit: 10},
 			PullRequests:  &config.Section{Limit: 10},
+			Stars:         &config.Section{Limit: 10},
+			Releases:      &config.Section{Limit: 10},
+			Followers:     &config.Section{Limit: 10},
+			Gists:         &config.Section{Limit: 10},
 		},
 		Feeds: map[string]config.Feed{
 			"blog": {URL: srv.URL + "/feed", Limit: 5},
@@ -135,6 +198,18 @@ func TestFetchAllSectionsPresent(t *testing.T) {
 	}
 	if len(got.GitHub.Repos) != 1 {
 		t.Errorf("GitHub.Repos length = %d, want 1", len(got.GitHub.Repos))
+	}
+	if len(got.GitHub.Stars) != 1 {
+		t.Errorf("GitHub.Stars length = %d, want 1", len(got.GitHub.Stars))
+	}
+	if len(got.GitHub.Releases) != 1 {
+		t.Errorf("GitHub.Releases length = %d, want 1", len(got.GitHub.Releases))
+	}
+	if len(got.GitHub.Followers) != 1 {
+		t.Errorf("GitHub.Followers length = %d, want 1", len(got.GitHub.Followers))
+	}
+	if len(got.GitHub.Gists) != 1 {
+		t.Errorf("GitHub.Gists length = %d, want 1", len(got.GitHub.Gists))
 	}
 
 	// Verify feeds were populated
@@ -187,6 +262,18 @@ func TestFetchSkipsAbsentSections(t *testing.T) {
 	}
 	if got.GitHub.PullRequests != nil {
 		t.Errorf("GitHub.PullRequests = %+v, want nil (not configured)", got.GitHub.PullRequests)
+	}
+	if got.GitHub.Stars != nil {
+		t.Errorf("GitHub.Stars = %+v, want nil (not configured)", got.GitHub.Stars)
+	}
+	if got.GitHub.Releases != nil {
+		t.Errorf("GitHub.Releases = %+v, want nil (not configured)", got.GitHub.Releases)
+	}
+	if got.GitHub.Followers != nil {
+		t.Errorf("GitHub.Followers = %+v, want nil (not configured)", got.GitHub.Followers)
+	}
+	if got.GitHub.Gists != nil {
+		t.Errorf("GitHub.Gists = %+v, want nil (not configured)", got.GitHub.Gists)
 	}
 	if got.Feeds != nil {
 		t.Errorf("Feeds = %+v, want nil (not configured)", got.Feeds)
