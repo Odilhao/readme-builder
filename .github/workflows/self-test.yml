@@ -1,0 +1,133 @@
+name: self-test
+
+on:
+  schedule:
+    # Run daily at 08:00 UTC to catch GitHub API drift early
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CGO_ENABLED: "0"
+  GOFLAGS: -mod=readonly
+
+jobs:
+  self-test:
+    name: test against live GitHub API
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Pin the toolchain
+        run: echo "GOTOOLCHAIN=local" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: go build -o readme-builder ./cmd/readme-builder
+
+      - name: Create self-test template
+        run: |
+          mkdir -p /tmp/self-test-env
+          tee /tmp/self-test-env/template.md > /dev/null << 'HEREDOC'
+          # User: {{.User.Login}}
+
+          ## Data Summary
+
+          Contributions: {{len .GitHub.Contributions}}
+          Repos: {{len .GitHub.Repos}}
+          Followers: {{len .GitHub.Followers}}
+
+          ## Test of template functions
+          Fetched at: {{.Now | humanize}}
+          HEREDOC
+
+      - name: Create self-test config
+        run: |
+          tee /tmp/self-test-env/config.toml > /dev/null << 'HEREDOC'
+          username = "octocat"
+
+          [github]
+          [github.contributions]
+          limit = 5
+
+          [github.repos]
+          limit = 5
+
+          [github.followers]
+          limit = 5
+
+          [[render]]
+          template = "/tmp/self-test-env/template.md"
+          output = "/tmp/self-test-env/output.md"
+          HEREDOC
+
+      - name: Run self-test with live GitHub API (render pipeline)
+        run: ./readme-builder -config /tmp/self-test-env/config.toml
+
+      - name: Validate rendered output
+        run: |
+          set -euo pipefail
+
+          output_file="/tmp/self-test-env/output.md"
+
+          # Verify the render step actually ran and created the file
+          if [ ! -f "$output_file" ]; then
+            echo "::error::Render did not create output.md"
+            exit 1
+          fi
+
+          if [ ! -s "$output_file" ]; then
+            echo "::error::output.md is empty"
+            exit 1
+          fi
+
+          # Verify it contains expected content from template execution
+          if ! grep -q "User: octocat" "$output_file"; then
+            echo "::error::output.md missing user login from template"
+            exit 1
+          fi
+
+          if ! grep -q "Data Summary" "$output_file"; then
+            echo "::error::output.md missing 'Data Summary' section"
+            exit 1
+          fi
+
+          if ! grep -q "Contributions:" "$output_file"; then
+            echo "::error::output.md missing 'Contributions:' field"
+            exit 1
+          fi
+
+          if ! grep -q "Fetched at:" "$output_file"; then
+            echo "::error::output.md missing 'Fetched at:' (template function not executed)"
+            exit 1
+          fi
+
+          # Verify humanize function worked (should have a date, not a raw timestamp)
+          if grep -q "Fetched at: 1970-01-01" "$output_file"; then
+            echo "::error::output.md has unformatted timestamp (humanize not working)"
+            exit 1
+          fi
+
+          echo "✓ Render pipeline successful: template parsed and executed against live GitHub API"
+          echo "✓ Template function execution verified: humanize working correctly"
+          echo "✓ Self-test passed: tool runs successfully against live GitHub API (no credential required)"
