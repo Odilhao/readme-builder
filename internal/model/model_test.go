@@ -63,7 +63,7 @@ func TestDataJSONWireFormat(t *testing.T) {
 			AvatarURL: "https://example.com/avatar.png",
 		},
 		GitHub: GitHub{
-			Contributions: []Contribution{{Repo: "octocat/example-org", Events: 5}},
+			Contributions: []Contribution{{Repo: "octocat/example-org", Events: 5, CommitsURL: "https://github.com/octocat/example-org/commits?author=octocat", ActivityURL: "https://github.com/octocat/example-org/issues?q=updated:30d+author:octocat"}},
 			Repos: []Repo{{
 				Name:        "example-org",
 				FullName:    "octocat/example-org",
@@ -168,13 +168,15 @@ func TestDataJSONWireFormat(t *testing.T) {
 	if !ok {
 		t.Fatalf("contribution is not an object")
 	}
-	for _, key := range []string{"repo", "events"} {
+	for _, key := range []string{"repo", "events", "commits_url", "activity_url"} {
 		if _, ok := contribution[key]; !ok {
 			t.Errorf("contribution missing key %q", key)
 		}
 	}
 	assertString(t, contribution["repo"], "contribution.repo", "octocat/example-org")
 	assertNumber(t, contribution["events"], "contribution.events", 5)
+	assertString(t, contribution["commits_url"], "contribution.commits_url", "https://github.com/octocat/example-org/commits?author=octocat")
+	assertString(t, contribution["activity_url"], "contribution.activity_url", "https://github.com/octocat/example-org/issues?q=updated:30d+author:octocat")
 
 	repos, ok := gh["repos"].([]any)
 	if !ok || len(repos) != 1 {

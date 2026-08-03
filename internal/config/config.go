@@ -45,9 +45,12 @@ type GitHub struct {
 }
 
 // Section is a requested GitHub section. Limit 0 means it yields no items;
-// an omitted limit becomes DefaultSectionLimit, never 0.
+// an omitted limit becomes DefaultSectionLimit, never 0. TimeWindow is a
+// recency qualifier for searches (e.g., "7d", "2w", "1y"); used only by
+// Contributions and defaults to "30d".
 type Section struct {
-	Limit int
+	Limit      int
+	TimeWindow string
 }
 
 type Feed struct {
@@ -86,7 +89,8 @@ type rawGitHub struct {
 }
 
 type rawSection struct {
-	Limit *int `toml:"limit"`
+	Limit      *int   `toml:"limit"`
+	TimeWindow string `toml:"time_window"`
 }
 
 type rawFeed struct {
@@ -102,6 +106,10 @@ type rawRender struct {
 // feedName must be reachable as .Feeds.<name> in a template, where a hyphen is
 // a parse error. ASCII only, to keep confusables out of a JSON object key.
 var feedName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// timeWindowFormat matches valid GitHub search time-window suffixes: digits followed
+// by d (days), w (weeks), or y (years). Examples: 3d, 2w, 1y.
+var timeWindowFormat = regexp.MustCompile(`^\d+[dwy]$`)
 
 // Load reads and validates the config at path. It needs no credential and
 // performs no network access.
@@ -215,7 +223,16 @@ func buildGitHub(path string, raw *rawGitHub) (GitHub, error) {
 		if err != nil {
 			return gh, err
 		}
-		*s.dst = &Section{Limit: limit}
+		timeWindow := s.raw.TimeWindow
+		// TimeWindow is specific to Contributions; default to 30d if absent.
+		if s.name == "contributions" && timeWindow == "" {
+			timeWindow = "30d"
+		}
+		// Validate time_window format if present (for contributions or any future uses).
+		if timeWindow != "" && !timeWindowFormat.MatchString(timeWindow) {
+			return gh, fmt.Errorf("%s: github.%s.time_window: %q is invalid; must match format like 3d, 2w, 1y", path, s.name, timeWindow)
+		}
+		*s.dst = &Section{Limit: limit, TimeWindow: timeWindow}
 	}
 	return gh, nil
 }

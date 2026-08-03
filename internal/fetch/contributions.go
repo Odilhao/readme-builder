@@ -81,7 +81,18 @@ func Contributions(ctx context.Context, c *Client, user string, gh config.GitHub
 
 	out := make([]model.Contribution, 0, len(candidates))
 	for _, cand := range candidates {
-		out = append(out, model.Contribution{Repo: cand.repo, Events: cand.events})
+		commitsURL := "https://github.com/" + cand.repo + "/commits?author=" + user
+		timeWindow := "30d"
+		if gh.Contributions != nil && gh.Contributions.TimeWindow != "" {
+			timeWindow = gh.Contributions.TimeWindow
+		}
+		activityURL := "https://github.com/" + cand.repo + "/issues?q=updated:" + timeWindow + "+author:" + user
+		out = append(out, model.Contribution{
+			Repo:        cand.repo,
+			Events:      cand.events,
+			CommitsURL:  commitsURL,
+			ActivityURL: activityURL,
+		})
 	}
 	return out, nil
 }
