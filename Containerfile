@@ -8,7 +8,7 @@
 # Verified 2026-08-02 via registry.hub.docker.com/v2/repositories/library/golang/tags/1.26.5-alpine
 # Supports: amd64 (sha256:111d79159b2326f7e80c4a4706e1ba166acb0e2611df853955f3621828cd49e8)
 #           arm64 (sha256:787328cefd7937073af18fc4b3a725f47e011ffdde9c2908239a25cae6b2f02b)
-FROM docker.io/library/golang@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS builder
+FROM docker.io/library/golang@sha256:3aff6657219a4d9c14e27fb1d8976c49c29fddb70ba835014f477e1c70636647 AS builder
 
 # Version string embedded via -ldflags below; mirrors .goreleaser.yaml's -X main.currentVersion.
 ARG VERSION=dev
