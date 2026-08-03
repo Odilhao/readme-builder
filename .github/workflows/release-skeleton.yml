@@ -201,6 +201,7 @@ jobs:
             --volume ${{ github.workspace }}/hermeto-output:/tmp/hermeto-output:Z
             --volume ${{ github.workspace }}/hermeto.env.container:/tmp/hermeto.env:Z
             --network=none
+            --build-arg VERSION=${{ github.ref_name }}
 
       - name: Push image to ghcr.io
         id: push
