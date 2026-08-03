@@ -55,9 +55,37 @@ func Fetch(ctx context.Context, c *Client, cfg *config.Config) (*model.Data, err
 		data.GitHub.PullRequests = prs
 	}
 
-	// Stars, Releases, Followers, Gists are not yet implemented, so they are
-	// always skipped for now. As they are added, follow the same pattern:
-	// if cfg.GitHub.<Section> != nil, fetch and assign.
+	if cfg.GitHub.Stars != nil {
+		stars, err := Stars(ctx, c, cfg.Username, cfg.GitHub)
+		if err != nil {
+			return nil, err
+		}
+		data.GitHub.Stars = stars
+	}
+
+	if cfg.GitHub.Releases != nil {
+		releases, err := Releases(ctx, c, cfg.Username, cfg.GitHub)
+		if err != nil {
+			return nil, err
+		}
+		data.GitHub.Releases = releases
+	}
+
+	if cfg.GitHub.Followers != nil {
+		followers, err := Followers(ctx, c, cfg.Username, cfg.GitHub)
+		if err != nil {
+			return nil, err
+		}
+		data.GitHub.Followers = followers
+	}
+
+	if cfg.GitHub.Gists != nil {
+		gists, err := Gists(ctx, c, cfg.Username, cfg.GitHub)
+		if err != nil {
+			return nil, err
+		}
+		data.GitHub.Gists = gists
+	}
 
 	// Fetch feeds only if configured (non-nil map).
 	if cfg.Feeds != nil {
