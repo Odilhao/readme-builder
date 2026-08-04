@@ -176,7 +176,7 @@ func contrib(repo string, events int, login string) model.Contribution {
 		Repo:        repo,
 		Events:      events,
 		CommitsURL:  "https://github.com/" + repo + "/commits?author=" + login,
-		ActivityURL: "https://github.com/" + repo + "/issues?q=updated:30d+author:" + login,
+		ActivityURL: "https://github.com/" + repo + "/issues?q=updated:>@today-30d+author:" + login,
 	}
 }
 

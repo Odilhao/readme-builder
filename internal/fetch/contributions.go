@@ -86,7 +86,7 @@ func Contributions(ctx context.Context, c *Client, user string, gh config.GitHub
 		if gh.Contributions != nil && gh.Contributions.TimeWindow != "" {
 			timeWindow = gh.Contributions.TimeWindow
 		}
-		activityURL := "https://github.com/" + cand.repo + "/issues?q=updated:" + timeWindow + "+author:" + user
+		activityURL := "https://github.com/" + cand.repo + "/issues?q=updated:>@today-" + timeWindow + "+author:" + user
 		out = append(out, model.Contribution{
 			Repo:        cand.repo,
 			Events:      cand.events,

@@ -6,7 +6,7 @@ A test account for the API and Octocat lovers everywhere.
 
 ### Contributions
 
-- example-org/example-repo: 5 events ([commits](https://github.com/example-org/example-repo/commits?author=octocat) · [activity](https://github.com/example-org/example-repo/issues?q=updated:30d+author:octocat))
+- example-org/example-repo: 5 events ([commits](https://github.com/example-org/example-repo/commits?author=octocat) · [activity](https://github.com/example-org/example-repo/issues?q=updated:>@today-30d+author:octocat))
 
 
 ### Repositories

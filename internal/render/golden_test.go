@@ -112,7 +112,7 @@ func TestRenderProducesGoldenOutputForRealTemplate(t *testing.T) {
 					Repo:        "example-org/example-repo",
 					Events:      5,
 					CommitsURL:  "https://github.com/example-org/example-repo/commits?author=octocat",
-					ActivityURL: "https://github.com/example-org/example-repo/issues?q=updated:30d+author:octocat",
+					ActivityURL: "https://github.com/example-org/example-repo/issues?q=updated:>@today-30d+author:octocat",
 				},
 			},
 			Repos: []model.Repo{
