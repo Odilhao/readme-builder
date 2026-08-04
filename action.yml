@@ -19,7 +19,7 @@ runs:
     - name: Run readme-builder
       shell: bash
       env:
-        VERSION: v1.0.1
+        VERSION: v1.0.2
       run: |
         set -e
 
