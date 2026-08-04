@@ -87,6 +87,14 @@ func Fetch(ctx context.Context, c *Client, cfg *config.Config) (*model.Data, err
 		data.GitHub.Gists = gists
 	}
 
+	if cfg.GitHub.TopProjects != nil {
+		topProjects, err := TopProjects(ctx, c, cfg.Username, cfg.GitHub)
+		if err != nil {
+			return nil, err
+		}
+		data.GitHub.TopProjects = topProjects
+	}
+
 	// Fetch feeds only if configured (non-nil map).
 	if cfg.Feeds != nil {
 		feeds, err := Feeds(ctx, cfg.Feeds)

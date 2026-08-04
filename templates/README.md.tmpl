@@ -22,6 +22,12 @@
 - [{{.Title}}]({{.URL}}) in {{.Repo}} ({{.State}})
 {{end}}
 
+### Most Active Projects
+
+{{range .GitHub.TopProjects -}}
+- {{.Repo}}: {{.Score}} activity ({{.Commits}} commits, {{.PullRequests}} pull requests, {{.Reviews}} reviews)
+{{end}}
+
 ## Feeds
 
 {{range $name, $items := .Feeds -}}

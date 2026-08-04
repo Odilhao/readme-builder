@@ -104,6 +104,13 @@ func TestDataJSONWireFormat(t *testing.T) {
 				URL:         "https://example.com/gists/abc123",
 				CreatedAt:   now,
 			}},
+			TopProjects: []TopProject{{
+				Repo:         "octocat/example-org",
+				Commits:      3,
+				PullRequests: 2,
+				Reviews:      1,
+				Score:        6,
+			}},
 		},
 		Feeds: map[string][]FeedItem{
 			"blog": {{
@@ -153,7 +160,7 @@ func TestDataJSONWireFormat(t *testing.T) {
 	}
 	for _, key := range []string{
 		"contributions", "repos", "forks", "pull_requests",
-		"stars", "releases", "followers", "gists",
+		"stars", "releases", "followers", "gists", "top_projects",
 	} {
 		if _, ok := gh[key]; !ok {
 			t.Errorf("github missing key %q", key)
@@ -306,6 +313,25 @@ func TestDataJSONWireFormat(t *testing.T) {
 	assertString(t, gist["description"], "gist.description", "an example gist")
 	assertString(t, gist["url"], "gist.url", "https://example.com/gists/abc123")
 	assertRFC3339(t, gist["created_at"], "gist.created_at", now)
+
+	topProjects, ok := gh["top_projects"].([]any)
+	if !ok || len(topProjects) != 1 {
+		t.Fatalf("github.top_projects unexpected: %v", gh["top_projects"])
+	}
+	topProject, ok := topProjects[0].(map[string]any)
+	if !ok {
+		t.Fatalf("top_project is not an object")
+	}
+	for _, key := range []string{"repo", "commits", "pull_requests", "reviews", "score"} {
+		if _, ok := topProject[key]; !ok {
+			t.Errorf("top_project missing key %q", key)
+		}
+	}
+	assertString(t, topProject["repo"], "top_project.repo", "octocat/example-org")
+	assertNumber(t, topProject["commits"], "top_project.commits", 3)
+	assertNumber(t, topProject["pull_requests"], "top_project.pull_requests", 2)
+	assertNumber(t, topProject["reviews"], "top_project.reviews", 1)
+	assertNumber(t, topProject["score"], "top_project.score", 6)
 
 	feeds, ok := raw["feeds"].(map[string]any)
 	if !ok {
