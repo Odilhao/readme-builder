@@ -128,6 +128,7 @@ func TestEverySectionIsWired(t *testing.T) {
 		Releases:      &Section{Limit: 6, TimeWindow: ""},
 		Followers:     &Section{Limit: 7, TimeWindow: ""},
 		Gists:         &Section{Limit: 8, TimeWindow: ""},
+		TopProjects:   &Section{Limit: 9, TimeWindow: "30d"},
 	}
 	if !reflect.DeepEqual(gh, want) {
 		t.Errorf("GitHub:\n got %s\nwant %s", formatSections(gh), formatSections(want))
@@ -146,6 +147,7 @@ func TestEverySectionIsWired(t *testing.T) {
 		{"releases", gh.Releases, 6},
 		{"followers", gh.Followers, 7},
 		{"gists", gh.Gists, 8},
+		{"topprojects", gh.TopProjects, 9},
 	} {
 		if s.got == nil {
 			t.Errorf("github.%s: got nil, want a section with limit %d", s.name, s.want)
@@ -166,9 +168,9 @@ func formatSections(gh GitHub) string {
 		}
 		return fmt.Sprint(s.Limit)
 	}
-	return fmt.Sprintf("{contributions:%s repos:%s forks:%s pull_requests:%s stars:%s releases:%s followers:%s gists:%s}",
+	return fmt.Sprintf("{contributions:%s repos:%s forks:%s pull_requests:%s stars:%s releases:%s followers:%s gists:%s topprojects:%s}",
 		limit(gh.Contributions), limit(gh.Repos), limit(gh.Forks), limit(gh.PullRequests),
-		limit(gh.Stars), limit(gh.Releases), limit(gh.Followers), limit(gh.Gists))
+		limit(gh.Stars), limit(gh.Releases), limit(gh.Followers), limit(gh.Gists), limit(gh.TopProjects))
 }
 
 func TestDefaultLimits(t *testing.T) {
@@ -306,6 +308,38 @@ func TestContributionsTimeWindowParsing(t *testing.T) {
 				}
 				if cfg.GitHub.Contributions.TimeWindow != tt.want {
 					t.Errorf("TimeWindow: got %q, want %q", cfg.GitHub.Contributions.TimeWindow, tt.want)
+				}
+			}
+		})
+	}
+}
+
+// TopProjects reuses the same time_window parsing and validation as
+// Contributions (#72): valid format, an invalid suffix, and the same 30d
+// default when the section is present but time_window is omitted.
+func TestTopProjectsTimeWindowParsing(t *testing.T) {
+	tests := []struct {
+		name    string
+		fixture string
+		want    string
+		wantErr bool
+	}{
+		{"valid 7d", "topprojects_time_window_valid.toml", "7d", false},
+		{"invalid suffix", "topprojects_time_window_invalid.toml", "", true},
+		{"absent uses default", "topprojects_time_window_absent.toml", "30d", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.wantErr {
+				got := loadErr(t, tt.fixture)
+				wantContains(t, got, "time_window", "invalid")
+			} else {
+				cfg := load(t, tt.fixture)
+				if cfg.GitHub.TopProjects == nil {
+					t.Fatal("github.topprojects: got nil, want a section")
+				}
+				if cfg.GitHub.TopProjects.TimeWindow != tt.want {
+					t.Errorf("TimeWindow: got %q, want %q", cfg.GitHub.TopProjects.TimeWindow, tt.want)
 				}
 			}
 		})

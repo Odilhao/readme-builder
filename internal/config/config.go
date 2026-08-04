@@ -42,12 +42,13 @@ type GitHub struct {
 	Releases      *Section
 	Followers     *Section
 	Gists         *Section
+	TopProjects   *Section
 }
 
 // Section is a requested GitHub section. Limit 0 means it yields no items;
 // an omitted limit becomes DefaultSectionLimit, never 0. TimeWindow is a
-// recency qualifier for searches (e.g., "7d", "2w", "1y"); used only by
-// Contributions and defaults to "30d".
+// recency qualifier for searches (e.g., "7d", "2w", "1y"); used by
+// Contributions and TopProjects, both defaulting to "30d".
 type Section struct {
 	Limit      int
 	TimeWindow string
@@ -86,6 +87,7 @@ type rawGitHub struct {
 	Releases      *rawSection `toml:"releases"`
 	Followers     *rawSection `toml:"followers"`
 	Gists         *rawSection `toml:"gists"`
+	TopProjects   *rawSection `toml:"topprojects"`
 }
 
 type rawSection struct {
@@ -214,6 +216,7 @@ func buildGitHub(path string, raw *rawGitHub) (GitHub, error) {
 		{"releases", raw.Releases, &gh.Releases},
 		{"followers", raw.Followers, &gh.Followers},
 		{"gists", raw.Gists, &gh.Gists},
+		{"topprojects", raw.TopProjects, &gh.TopProjects},
 	}
 	for _, s := range sections {
 		if s.raw == nil {
@@ -224,11 +227,12 @@ func buildGitHub(path string, raw *rawGitHub) (GitHub, error) {
 			return gh, err
 		}
 		timeWindow := s.raw.TimeWindow
-		// TimeWindow is specific to Contributions; default to 30d if absent.
-		if s.name == "contributions" && timeWindow == "" {
+		// TimeWindow is specific to Contributions and TopProjects; default to
+		// 30d if absent.
+		if (s.name == "contributions" || s.name == "topprojects") && timeWindow == "" {
 			timeWindow = "30d"
 		}
-		// Validate time_window format if present (for contributions or any future uses).
+		// Validate time_window format if present (for contributions, topprojects, or any future uses).
 		if timeWindow != "" && !timeWindowFormat.MatchString(timeWindow) {
 			return gh, fmt.Errorf("%s: github.%s.time_window: %q is invalid; must match format like 3d, 2w, 1y", path, s.name, timeWindow)
 		}

@@ -26,6 +26,9 @@ limit = 7
 [github.gists]
 limit = 8
 
+[github.topprojects]
+limit = 9
+
 [[render]]
 template = "README.md.tmpl"
 output = "README.md"

@@ -138,6 +138,15 @@ func TestRenderProducesGoldenOutputForRealTemplate(t *testing.T) {
 					State: "open",
 				},
 			},
+			TopProjects: []model.TopProject{
+				{
+					Repo:         "example-org/example-repo",
+					Commits:      5,
+					PullRequests: 2,
+					Reviews:      1,
+					Score:        8,
+				},
+			},
 		},
 		Feeds: map[string][]model.FeedItem{
 			"Blog": {

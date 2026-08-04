@@ -135,6 +135,22 @@ func newOrchestratorServer(t *testing.T) *orchestratorServer {
 		_ = json.NewEncoder(w).Encode(releases)
 	})
 
+	// GET /search/commits for top projects' commit activity
+	mux.HandleFunc("/search/commits", func(w http.ResponseWriter, r *http.Request) {
+		s.requestedPaths = append(s.requestedPaths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		result := map[string]any{
+			"total_count": 1,
+			"items": []map[string]any{
+				{
+					"sha":        "abc123",
+					"repository": map[string]any{"full_name": "example-org/example-repo"},
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(result)
+	})
+
 	// Feed endpoint (simple RSS)
 	mux.HandleFunc("/feed", func(w http.ResponseWriter, r *http.Request) {
 		s.requestedPaths = append(s.requestedPaths, r.URL.Path)
@@ -173,6 +189,7 @@ func TestFetchAllSectionsPresent(t *testing.T) {
 			Releases:      &config.Section{Limit: 10},
 			Followers:     &config.Section{Limit: 10},
 			Gists:         &config.Section{Limit: 10},
+			TopProjects:   &config.Section{Limit: 10, TimeWindow: "30d"},
 		},
 		Feeds: map[string]config.Feed{
 			"blog": {URL: srv.URL + "/feed", Limit: 5},
@@ -210,6 +227,9 @@ func TestFetchAllSectionsPresent(t *testing.T) {
 	}
 	if len(got.GitHub.Gists) != 1 {
 		t.Errorf("GitHub.Gists length = %d, want 1", len(got.GitHub.Gists))
+	}
+	if len(got.GitHub.TopProjects) != 1 {
+		t.Errorf("GitHub.TopProjects length = %d, want 1", len(got.GitHub.TopProjects))
 	}
 
 	// Verify feeds were populated
@@ -275,6 +295,9 @@ func TestFetchSkipsAbsentSections(t *testing.T) {
 	if got.GitHub.Gists != nil {
 		t.Errorf("GitHub.Gists = %+v, want nil (not configured)", got.GitHub.Gists)
 	}
+	if got.GitHub.TopProjects != nil {
+		t.Errorf("GitHub.TopProjects = %+v, want nil (not configured)", got.GitHub.TopProjects)
+	}
 	if got.Feeds != nil {
 		t.Errorf("Feeds = %+v, want nil (not configured)", got.Feeds)
 	}
@@ -322,6 +345,42 @@ func TestFetchNoSections(t *testing.T) {
 	// Verify no endpoints were called when no sections are configured.
 	if len(srv.requestedPaths) != 0 {
 		t.Errorf("requestedPaths length = %d, want 0; got %v", len(srv.requestedPaths), srv.requestedPaths)
+	}
+}
+
+// TestFetchWiresTopProjectsWhenConfiguredAlone verifies TopProjects is
+// fetched on its own (Contributions absent), proving it reuses the events
+// timeline via its own call rather than depending on Contributions having
+// already run in the same Fetch.
+func TestFetchWiresTopProjectsWhenConfiguredAlone(t *testing.T) {
+	srv := newOrchestratorServer(t)
+	c := testClient(t, srv.URL)
+
+	cfg := &config.Config{
+		Username: "octocat",
+		GitHub: config.GitHub{
+			TopProjects: &config.Section{Limit: 10, TimeWindow: "30d"},
+		},
+	}
+
+	got, err := Fetch(context.Background(), c, cfg)
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(got.GitHub.TopProjects) != 1 {
+		t.Errorf("GitHub.TopProjects length = %d, want 1", len(got.GitHub.TopProjects))
+	}
+
+	wantAny := map[string]bool{"/search/commits": false, "/search/issues": false, "/users/octocat/events/public": false}
+	for _, p := range srv.requestedPaths {
+		if _, ok := wantAny[p]; ok {
+			wantAny[p] = true
+		}
+	}
+	for path, called := range wantAny {
+		if !called {
+			t.Errorf("%s was never called for a TopProjects-only config", path)
+		}
 	}
 }
 

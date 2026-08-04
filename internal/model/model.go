@@ -27,6 +27,7 @@ type GitHub struct {
 	Releases      []Release      `json:"releases"`
 	Followers     []Follower     `json:"followers"`
 	Gists         []Gist         `json:"gists"`
+	TopProjects   []TopProject   `json:"top_projects"`
 }
 
 type Contribution struct {
@@ -37,6 +38,18 @@ type Contribution struct {
 	// Events counts observed events per repo from GET /users/{u}/events/public.
 	// That API retains only ~90 days and 300 events, so this is a floor, not
 	// a lifetime total.
+}
+
+// TopProject is a repository ranked by summed activity (commits + pull
+// requests + reviews) over a configured time window. Score is the sum of the
+// other three counts, computed once in fetch rather than in the template,
+// per invariant 3.
+type TopProject struct {
+	Repo         string `json:"repo"`
+	Commits      int    `json:"commits"`
+	PullRequests int    `json:"pull_requests"`
+	Reviews      int    `json:"reviews"`
+	Score        int    `json:"score"`
 }
 
 type Repo struct {
