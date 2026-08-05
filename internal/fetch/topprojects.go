@@ -93,14 +93,19 @@ func TopProjects(ctx context.Context, c *Client, user string, gh config.GitHub) 
 		return nil, err
 	}
 	for _, e := range events {
-		if e.GetType() != "PullRequestReviewEvent" {
-			continue
-		}
+		eventType := e.GetType()
 		repo := e.GetRepo().GetName()
 		if repo == "" || excluded(repo, user, gh) {
 			continue
 		}
-		get(repo).reviews++
+		switch eventType {
+		case "PullRequestReviewEvent":
+			get(repo).reviews++
+		case "PushEvent":
+			// Mining PushEvent to widen candidate pool (no commit count
+			// increment, as PushEvent payloads lack authoritative counts).
+			get(repo)
+		}
 	}
 
 	out := make([]model.TopProject, 0, len(order))

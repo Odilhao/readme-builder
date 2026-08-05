@@ -958,3 +958,179 @@ func TestTopProjectsExactCommitCountsPassesCorrectQueryParams(t *testing.T) {
 		t.Errorf("per_page param = %q, want %q", got, want)
 	}
 }
+
+// TestTopProjectsPushEventOnlyRepoBecomesCandidate tests that a repo appearing
+// solely in PushEvent data (not on either search page) is included as a
+// candidate and receives an exact commit count. This proves PushEvent mining
+// widens the candidate pool beyond the two fixed search queries.
+func TestTopProjectsPushEventOnlyRepoBecomesCandidate(t *testing.T) {
+	base := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	srv := newTopProjectsServer(t,
+		[]commitItem{commit("a1", "example-org/search-repo")},
+		[]searchIssue{pr(1, "pr", "example-org/search-repo")},
+		[]event{
+			ev("PullRequestReviewEvent", "example-org/search-repo", base),
+			ev("PushEvent", "example-org/push-only-repo", base),
+		},
+	)
+	// Set up exact commit counts for both repos
+	srv.reposCommits["example-org/search-repo"] = 10
+	srv.reposCommits["example-org/push-only-repo"] = 25
+
+	c := testClient(t, srv.URL)
+
+	got, err := TopProjects(context.Background(), c, "octocat", tpConfig(10))
+	if err != nil {
+		t.Fatalf("TopProjects: %v", err)
+	}
+
+	// Should have 2 repos: one from search results, one from PushEvent only
+	if len(got) != 2 {
+		t.Fatalf("got %d repos, want 2", len(got))
+	}
+
+	// Find the push-only repo in results
+	var pushOnlyRepo *model.TopProject
+	for i := range got {
+		if got[i].Repo == "example-org/push-only-repo" {
+			pushOnlyRepo = &got[i]
+			break
+		}
+	}
+
+	if pushOnlyRepo == nil {
+		t.Errorf("PushEvent-only repo not found in results: %+v", got)
+	} else if pushOnlyRepo.Commits != 25 {
+		t.Errorf("PushEvent-only repo has %d commits, want 25 (should get exact count)", pushOnlyRepo.Commits)
+	}
+
+	// Verify that we still made only 1 search/commits and 1 search/issues call (no new requests)
+	if n := srv.countPath("/search/commits"); n != 1 {
+		t.Errorf("/search/commits requests = %d, want exactly 1", n)
+	}
+	if n := srv.countPath("/search/issues"); n != 1 {
+		t.Errorf("/search/issues requests = %d, want exactly 1", n)
+	}
+}
+
+// TestTopProjectsAppliesExcludedFilterToPushEvents tests that excluded()
+// filtering is applied to repos discovered via PushEvent, just as it is to
+// commits, PRs, and review events - filtering happens in the event loop, not
+// by narrowing the search query.
+func TestTopProjectsAppliesExcludedFilterToPushEvents(t *testing.T) {
+	base := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	srv := newTopProjectsServer(t,
+		nil, nil,
+		[]event{
+			ev("PushEvent", "excluded-org/excluded-repo", base),
+			ev("PushEvent", "example-org/example-repo", base),
+		},
+	)
+	srv.reposCommits["example-org/example-repo"] = 5
+
+	c := testClient(t, srv.URL)
+
+	gh := tpConfig(10)
+	gh.ExcludeOrgs = []string{"excluded-org"}
+	got, err := TopProjects(context.Background(), c, "octocat", gh)
+	if err != nil {
+		t.Fatalf("TopProjects: %v", err)
+	}
+
+	// Should have only the non-excluded repo
+	if len(got) != 1 || got[0].Repo != "example-org/example-repo" {
+		t.Errorf("got %+v, want only example-org/example-repo (excluded-org must be dropped from PushEvent)", got)
+	}
+
+	// Verify excluded repo did not get an exact commit request
+	for _, req := range srv.reposCommitsReqs {
+		if strings.Contains(req, "excluded-org") {
+			t.Errorf("unexpected request to excluded repo: %s", req)
+		}
+	}
+}
+
+// TestTopProjectsPushEventOnlyRepoScoresToZeroPreCap tests that PushEvent-only
+// repos contribute zero to pre-cap scoring. This test uses a scenario where
+// pre-cap ranking determines which candidate survives the Limit cap: a
+// commit-sourced candidate (highest score), a PushEvent-only repo (must be 0),
+// and review-sourced candidates (score 1 each). With Limit=2, if the
+// mutation (get(repo).commits++) were applied, the push-only repo would score 1
+// pre-cap, rank equal to or above a review-sourced candidate, and wrongly
+// displace it from the top-Limit window. The test verifies a review-sourced
+// candidate is in the final results, proving it survived pre-cap truncation
+// and was not wrongly displaced by the push-only repo scoring >0.
+func TestTopProjectsPushEventOnlyRepoScoresToZeroPreCap(t *testing.T) {
+	base := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	srv := newTopProjectsServer(t,
+		[]commitItem{
+			// commits-repo: 2 commits (highest pre-cap score = 2)
+			commit("c1", "example-org/commits-repo"),
+			commit("c2", "example-org/commits-repo"),
+		},
+		nil, // no PRs
+		[]event{
+			// push-only-repo: PushEvent only (pre-cap score = 0, must not increment)
+			// Added first so it appears before review-sourced repos in insertion order.
+			// With the mutation (get(repo).commits++), push-only would score 1 pre-cap.
+			ev("PushEvent", "example-org/push-only-repo", base),
+			// review-repo1: 1 review (pre-cap score = 1)
+			ev("PullRequestReviewEvent", "example-org/review-repo1", base),
+			// review-repo2: 1 review (pre-cap score = 1)
+			ev("PullRequestReviewEvent", "example-org/review-repo2", base),
+		},
+	)
+
+	srv.reposCommits["example-org/commits-repo"] = 50
+	srv.reposCommits["example-org/push-only-repo"] = 5
+	srv.reposCommits["example-org/review-repo1"] = 60
+	srv.reposCommits["example-org/review-repo2"] = 40
+
+	c := testClient(t, srv.URL)
+
+	// Limit = 2: with correct code, insertion order is [commits-repo, push-only-repo,
+	// review-repo1, review-repo2], pre-cap scores are [2, 0, 1, 1]. Sorted descending
+	// with stable sort: commits-repo(2), review-repo1(1), review-repo2(1), push-only(0).
+	// Top 2 = commits-repo and review-repo1.
+	//
+	// With mutation (push-only.commits++), pre-cap scores become [2, 1, 1, 1].
+	// Sorted descending stable: commits-repo(2), push-only(1), review-repo1(1), review-repo2(1).
+	// Top 2 = commits-repo and push-only (review-repo1 wrongly truncated).
+	got, err := TopProjects(context.Background(), c, "octocat", tpConfig(2))
+	if err != nil {
+		t.Fatalf("TopProjects: %v", err)
+	}
+
+	if len(got) != 2 {
+		t.Fatalf("got %d repos, want exactly 2", len(got))
+	}
+
+	// Verify review-repo1 is in the final results. If the mutation were applied,
+	// review-repo1 would be wrongly excluded from the pre-cap top-Limit, would not
+	// get exact counts, and would not appear here.
+	var foundReviewRepo1 bool
+	for _, tp := range got {
+		if tp.Repo == "example-org/review-repo1" {
+			foundReviewRepo1 = true
+			// After exact count fetch: 60 (exact commits) + 0 (PRs) + 1 (review) = 61
+			if tp.Commits != 60 {
+				t.Errorf("review-repo1 commits = %d, want 60", tp.Commits)
+			}
+			if tp.Score != 61 {
+				t.Errorf("review-repo1 score = %d, want 61", tp.Score)
+			}
+			break
+		}
+	}
+	if !foundReviewRepo1 {
+		t.Errorf("review-repo1 not found in top-2 results %+v; it was wrongly excluded by pre-cap truncation (mutation likely applied)", got)
+	}
+
+	// Verify push-only-repo is NOT in the top 2 results. It should rank 3rd after
+	// exact counts are applied (scores: review-repo1=61, commits-repo=53, push-only=5).
+	for _, tp := range got {
+		if tp.Repo == "example-org/push-only-repo" {
+			t.Errorf("push-only-repo unexpectedly in top 2 results: %+v (should rank below review-repo1)", tp)
+		}
+	}
+}
