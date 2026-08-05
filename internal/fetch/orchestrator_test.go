@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -149,6 +150,20 @@ func newOrchestratorServer(t *testing.T) *orchestratorServer {
 			},
 		}
 		_ = json.NewEncoder(w).Encode(result)
+	})
+
+	// GET /repos/{owner}/{repo}/commits for exact commit counts
+	mux.HandleFunc("/repos/", func(w http.ResponseWriter, r *http.Request) {
+		s.requestedPaths = append(s.requestedPaths, r.URL.Path)
+		// Check if this is a commits request
+		if len(r.URL.Path) > len("/repos/") && strings.Contains(r.URL.Path, "/commits") {
+			w.Header().Set("Content-Type", "application/json")
+			// Return a single commit with no Link header (simulating 1 commit)
+			commits := []map[string]any{
+				{"sha": "abc123"},
+			}
+			_ = json.NewEncoder(w).Encode(commits)
+		}
 	})
 
 	// Feed endpoint (simple RSS)
