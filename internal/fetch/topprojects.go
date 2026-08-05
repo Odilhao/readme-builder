@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/v89/github"
@@ -119,7 +120,68 @@ func TopProjects(ctx context.Context, c *Client, user string, gh config.GitHub) 
 	if limit < len(out) {
 		out = out[:limit]
 	}
+
+	// Fetch exact commit counts for the top-Limit candidates and recompute scores
+	until := time.Now().UTC()
+	out, err = exactCommitCounts(ctx, c, user, out, since, until)
+	if err != nil {
+		return nil, err
+	}
+
 	return out, nil
+}
+
+// exactCommitCounts fetches exact commit counts for each repo in the input
+// list and recomputes scores, re-sorting by score (stable sort for ties).
+// Each exact count is fetched via GET /repos/{owner}/{repo}/commits with
+// Author, Since, Until, and PerPage=1, reading the page number from the
+// Link: rel="last" header (Response.LastPage field).
+func exactCommitCounts(ctx context.Context, c *Client, user string, candidates []model.TopProject, sinceStr string, until time.Time) ([]model.TopProject, error) {
+	since, err := time.Parse("2006-01-02", sinceStr)
+	if err != nil {
+		// Fallback to 30 days if parsing fails, but should not happen
+		since = until.AddDate(0, 0, -30)
+	}
+
+	for i, cand := range candidates {
+		parts := strings.Split(cand.Repo, "/")
+		if len(parts) != 2 {
+			continue // defensive; should not happen
+		}
+		owner, repo := parts[0], parts[1]
+
+		// Fetch commits with per_page=1 to get Link header with LastPage
+		commits, resp, err := c.gh.Repositories.ListCommits(ctx, owner, repo, &github.CommitsListOptions{
+			Author:      user,
+			Since:       since,
+			Until:       until,
+			ListOptions: github.ListOptions{PerPage: 1},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// Determine exact count from Response.LastPage
+		var exactCount int
+		if resp.LastPage > 0 {
+			// Multiple pages: exact count is LastPage
+			exactCount = resp.LastPage
+		} else if len(commits) > 0 {
+			// Single page with one or more items: exact count is len(commits)
+			exactCount = len(commits)
+		}
+		// else: no items and no LastPage = 0 commits
+
+		candidates[i].Commits = exactCount
+		candidates[i].Score = exactCount + candidates[i].PullRequests + candidates[i].Reviews
+	}
+
+	// Re-sort by recomputed Score (stable sort for tie order)
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].Score > candidates[j].Score
+	})
+
+	return candidates, nil
 }
 
 // topProjectsSince converts a validated Nd/Nw/Ny time-window string (format

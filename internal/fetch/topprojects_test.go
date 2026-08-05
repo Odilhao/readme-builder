@@ -3,9 +3,11 @@ package fetch
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,22 +29,25 @@ func commit(sha, repoFullName string) commitItem {
 	return c
 }
 
-// topProjectsServer serves /search/commits, /search/issues and
-// /users/{u}/events/public from fixed, single-page responses, recording every
-// request path and query so tests can assert call counts and pagination
-// (or its absence) directly off the wire.
+// topProjectsServer serves /search/commits, /search/issues,
+// /users/{u}/events/public, and /repos/{owner}/{repo}/commits from fixed
+// responses, recording every request path and query so tests can assert call
+// counts and pagination (or its absence) directly off the wire.
 type topProjectsServer struct {
 	*httptest.Server
 
-	paths          []string
-	commitsQueries []url.Values
-	issuesQueries  []url.Values
-	commits        []commitItem
-	issues         []searchIssue
-	events         []event
-	commitsStatus  int
-	issuesStatus   int
-	eventsStatus   int
+	paths               []string
+	commitsQueries      []url.Values
+	issuesQueries       []url.Values
+	reposCommits        map[string]int // "owner/repo" -> count of commits to return
+	reposCommitsReqs    []string       // full request URLs to /repos/.../commits
+	reposCommitsQueries []url.Values   // query parameters for each /repos/.../commits request
+	commits             []commitItem
+	issues              []searchIssue
+	events              []event
+	commitsStatus       int
+	issuesStatus        int
+	eventsStatus        int
 }
 
 func newTopProjectsServer(t *testing.T, commits []commitItem, issues []searchIssue, events []event) *topProjectsServer {
@@ -53,7 +58,15 @@ func newTopProjectsServer(t *testing.T, commits []commitItem, issues []searchIss
 func newTopProjectsServerWithStatus(t *testing.T, commits []commitItem, issues []searchIssue, events []event, commitsStatus, issuesStatus, eventsStatus int) *topProjectsServer {
 	t.Helper()
 
-	s := &topProjectsServer{commits: commits, issues: issues, events: events, commitsStatus: commitsStatus, issuesStatus: issuesStatus, eventsStatus: eventsStatus}
+	s := &topProjectsServer{
+		commits:       commits,
+		issues:        issues,
+		events:        events,
+		commitsStatus: commitsStatus,
+		issuesStatus:  issuesStatus,
+		eventsStatus:  eventsStatus,
+		reposCommits:  make(map[string]int),
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/search/commits", func(w http.ResponseWriter, r *http.Request) {
 		s.paths = append(s.paths, r.URL.Path)
@@ -92,6 +105,34 @@ func newTopProjectsServerWithStatus(t *testing.T, commits []commitItem, issues [
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(s.events)
 	})
+	mux.HandleFunc("/repos/", func(w http.ResponseWriter, r *http.Request) {
+		s.reposCommitsReqs = append(s.reposCommitsReqs, r.URL.String())
+		// Extract owner/repo from the path like "/repos/owner/repo/commits"
+		parts := strings.Split(r.URL.Path, "/")
+		// parts = ["", "repos", "owner", "repo", "commits"] (leading empty from split on "/")
+		if len(parts) >= 5 && parts[4] == "commits" {
+			ownerRepo := parts[2] + "/" + parts[3]
+			// Record query parameters for validation
+			s.reposCommitsQueries = append(s.reposCommitsQueries, r.URL.Query())
+			count := s.reposCommits[ownerRepo]
+			w.Header().Set("Content-Type", "application/json")
+			// Build commit items for the response
+			commitItems := make([]map[string]any, 0)
+			for i := 0; i < count && i < 1; i++ { // per_page=1, only return 1 item if count > 0
+				commitItems = append(commitItems, map[string]any{
+					"sha": "fake-sha-" + ownerRepo,
+				})
+			}
+			// If count > 1, set Link header with last page = count
+			// Format: <URL?page=1>; rel="first", <URL?page=N>; rel="last"
+			if count > 1 {
+				firstURL := fmt.Sprintf("%s%s?page=1", s.URL, r.URL.Path)
+				lastURL := fmt.Sprintf("%s%s?page=%d", s.URL, r.URL.Path, count)
+				w.Header().Set("Link", fmt.Sprintf(`<%s>; rel="first", <%s>; rel="last"`, firstURL, lastURL))
+			}
+			_ = json.NewEncoder(w).Encode(commitItems)
+		}
+	})
 	s.Server = httptest.NewServer(mux)
 	t.Cleanup(s.Close)
 	return s
@@ -101,6 +142,16 @@ func (s *topProjectsServer) countPath(path string) int {
 	n := 0
 	for _, p := range s.paths {
 		if p == path {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *topProjectsServer) repoCommitsRequests() int {
+	n := 0
+	for _, r := range s.reposCommitsReqs {
+		if strings.Contains(r, "/repos/") && strings.Contains(r, "/commits") {
 			n++
 		}
 	}
@@ -274,6 +325,7 @@ func TestTopProjectsAggregatesCommitsPRsAndReviewsIntoScore(t *testing.T) {
 			ev("PullRequestReviewEvent", "example-org/example-repo", base.Add(time.Hour)),
 		},
 	)
+	srv.reposCommits["example-org/example-repo"] = 3
 	c := testClient(t, srv.URL)
 
 	got, err := TopProjects(context.Background(), c, "octocat", tpConfig(10))
@@ -299,6 +351,8 @@ func TestTopProjectsSortsByScoreDescendingAndTruncatesToLimit(t *testing.T) {
 		},
 		nil, nil,
 	)
+	srv.reposCommits["example-org/low"] = 1
+	srv.reposCommits["example-org/high"] = 3
 	c := testClient(t, srv.URL)
 
 	got, err := TopProjects(context.Background(), c, "octocat", tpConfig(1))
@@ -330,6 +384,7 @@ func TestTopProjectsAppliesExcludedFilterToAllThreeSources(t *testing.T) {
 			ev("PullRequestReviewEvent", "example-org/example-repo", base),
 		},
 	)
+	srv.reposCommits["example-org/example-repo"] = 1
 	c := testClient(t, srv.URL)
 
 	gh := tpConfig(10)
@@ -557,5 +612,349 @@ func TestTopProjectsReturnsErrorFromEventsList(t *testing.T) {
 	}
 	if got != nil {
 		t.Errorf("got %+v, want nil result alongside the error", got)
+	}
+}
+
+// TestTopProjectsFetchesExactCommitCountsForTopCandidatesOnly tests that exact
+// commit counts are fetched only for repos in the final top-Limit output,
+// not for all candidates discovered.
+func TestTopProjectsFetchesExactCommitCountsForTopCandidatesOnly(t *testing.T) {
+	srv := newTopProjectsServer(t,
+		[]commitItem{
+			commit("a1", "org-a/repo-1"),
+			commit("a2", "org-a/repo-1"),
+			commit("a3", "org-a/repo-1"),
+			commit("b1", "org-b/repo-2"),
+			commit("c1", "org-c/repo-3"),
+		},
+		nil, nil,
+	)
+	// Set up exact commit counts for repos
+	srv.reposCommits["org-a/repo-1"] = 50
+	srv.reposCommits["org-b/repo-2"] = 25
+	srv.reposCommits["org-c/repo-3"] = 10
+
+	c := testClient(t, srv.URL)
+
+	got, err := TopProjects(context.Background(), c, "octocat", tpConfig(2))
+	if err != nil {
+		t.Fatalf("TopProjects: %v", err)
+	}
+
+	// Should have exactly 2 results (limit is 2)
+	if len(got) != 2 {
+		t.Fatalf("got %d repos, want 2", len(got))
+	}
+
+	// Should only have made 2 exact commit requests, not 3
+	if n := srv.repoCommitsRequests(); n != 2 {
+		t.Errorf("exact commit requests = %d, want 2 (only for top Limit repos)", n)
+	}
+
+	// Top 2 should be org-a/repo-1 and org-b/repo-2
+	if got[0].Repo != "org-a/repo-1" || got[0].Commits != 50 {
+		t.Errorf("got[0] = %+v, want org-a/repo-1 with 50 commits", got[0])
+	}
+	if got[1].Repo != "org-b/repo-2" || got[1].Commits != 25 {
+		t.Errorf("got[1] = %+v, want org-b/repo-2 with 25 commits", got[1])
+	}
+}
+
+// TestTopProjectsHandlesLinkHeaderWithMultiplePages tests that a Link header
+// with a "last" rel and page number is parsed to get the exact count.
+func TestTopProjectsHandlesLinkHeaderWithMultiplePages(t *testing.T) {
+	srv := newTopProjectsServer(t,
+		[]commitItem{commit("a1", "org/repo-multi")},
+		nil, nil,
+	)
+	srv.reposCommits["org/repo-multi"] = 42 // Sets Link header with page=42
+
+	c := testClient(t, srv.URL)
+
+	got, err := TopProjects(context.Background(), c, "octocat", tpConfig(10))
+	if err != nil {
+		t.Fatalf("TopProjects: %v", err)
+	}
+
+	if len(got) != 1 || got[0].Commits != 42 {
+		t.Errorf("got %+v, want 42 commits from Link header", got)
+	}
+}
+
+// TestTopProjectsHandlesZeroCommits tests the edge case where a repo has
+// zero commits: empty result list, no Link header.
+func TestTopProjectsHandlesZeroCommits(t *testing.T) {
+	srv := newTopProjectsServer(t,
+		[]commitItem{commit("a1", "org/repo-zero")},
+		nil, nil,
+	)
+	srv.reposCommits["org/repo-zero"] = 0 // No commits
+
+	c := testClient(t, srv.URL)
+
+	got, err := TopProjects(context.Background(), c, "octocat", tpConfig(10))
+	if err != nil {
+		t.Fatalf("TopProjects: %v", err)
+	}
+
+	if len(got) != 1 || got[0].Commits != 0 {
+		t.Errorf("got %+v, want 0 commits", got)
+	}
+}
+
+// TestTopProjectsHandlesSingleCommit tests the edge case where a repo has
+// exactly one commit: single item in result, no Link header, LastPage = 0.
+func TestTopProjectsHandlesSingleCommit(t *testing.T) {
+	srv := newTopProjectsServer(t,
+		[]commitItem{commit("a1", "org/repo-one")},
+		nil, nil,
+	)
+	srv.reposCommits["org/repo-one"] = 1 // Single commit
+
+	c := testClient(t, srv.URL)
+
+	got, err := TopProjects(context.Background(), c, "octocat", tpConfig(10))
+	if err != nil {
+		t.Fatalf("TopProjects: %v", err)
+	}
+
+	if len(got) != 1 || got[0].Commits != 1 {
+		t.Errorf("got %+v, want 1 commit", got)
+	}
+}
+
+// TestTopProjectsRecomputesScoreAfterExactCommits tests that Score is
+// recomputed as exact_commits + rough_prs + rough_reviews after the exact
+// commit fetch and re-sorted.
+func TestTopProjectsRecomputesScoreAfterExactCommits(t *testing.T) {
+	base := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	srv := newTopProjectsServer(t,
+		[]commitItem{
+			commit("a1", "org/repo-a"),
+			commit("b1", "org/repo-b"),
+			commit("b2", "org/repo-b"),
+		},
+		[]searchIssue{
+			pr(1, "pr", "org/repo-b"), // 1 PR for repo-b
+		},
+		[]event{
+			ev("PullRequestReviewEvent", "org/repo-a", base), // 1 review for repo-a
+		},
+	)
+	// Exact counts: repo-a has 100 commits, repo-b has 20 commits
+	srv.reposCommits["org/repo-a"] = 100
+	srv.reposCommits["org/repo-b"] = 20
+
+	c := testClient(t, srv.URL)
+
+	got, err := TopProjects(context.Background(), c, "octocat", tpConfig(10))
+	if err != nil {
+		t.Fatalf("TopProjects: %v", err)
+	}
+
+	// Expected scores after exact count fetch:
+	// repo-a: 100 (exact commits) + 0 (prs) + 1 (review) = 101
+	// repo-b: 20 (exact commits) + 1 (pr) + 0 (reviews) = 21
+	// So repo-a should be first
+	if len(got) != 2 {
+		t.Fatalf("got %d repos, want 2", len(got))
+	}
+	if got[0].Repo != "org/repo-a" || got[0].Score != 101 {
+		t.Errorf("got[0] = %+v, want org/repo-a with score 101", got[0])
+	}
+	if got[1].Repo != "org/repo-b" || got[1].Score != 21 {
+		t.Errorf("got[1] = %+v, want org/repo-b with score 21", got[1])
+	}
+}
+
+// TestTopProjectsResortAfterExactCommits tests that repos are re-sorted by
+// their new Score after exact commit counts are fetched, changing the order
+// from the rough-score ranking.
+func TestTopProjectsResortAfterExactCommits(t *testing.T) {
+	srv := newTopProjectsServer(t,
+		[]commitItem{
+			// Rough search: repo-a appears 5 times, repo-b appears 3 times
+			commit("a1", "org/repo-a"),
+			commit("a2", "org/repo-a"),
+			commit("a3", "org/repo-a"),
+			commit("a4", "org/repo-a"),
+			commit("a5", "org/repo-a"),
+			commit("b1", "org/repo-b"),
+			commit("b2", "org/repo-b"),
+			commit("b3", "org/repo-b"),
+		},
+		nil, nil,
+	)
+	// Exact counts: repo-a has 5 commits, repo-b has 100 commits
+	// So the order should flip after exact counts
+	srv.reposCommits["org/repo-a"] = 5
+	srv.reposCommits["org/repo-b"] = 100
+
+	c := testClient(t, srv.URL)
+
+	got, err := TopProjects(context.Background(), c, "octocat", tpConfig(10))
+	if err != nil {
+		t.Fatalf("TopProjects: %v", err)
+	}
+
+	if len(got) != 2 {
+		t.Fatalf("got %d repos, want 2", len(got))
+	}
+	// After exact counts, repo-b should be first (100 commits > 5 commits)
+	if got[0].Repo != "org/repo-b" || got[0].Commits != 100 {
+		t.Errorf("got[0] = %+v, want org/repo-b with 100 commits", got[0])
+	}
+	if got[1].Repo != "org/repo-a" || got[1].Commits != 5 {
+		t.Errorf("got[1] = %+v, want org/repo-a with 5 commits", got[1])
+	}
+}
+
+// TestTopProjectsAppliesExcludedBeforeExactCommits tests that excluded()
+// filtering is still applied before the exact commit fetch, preventing
+// excluded repos from even getting those requests.
+func TestTopProjectsAppliesExcludedBeforeExactCommits(t *testing.T) {
+	srv := newTopProjectsServer(t,
+		[]commitItem{
+			commit("a1", "excluded-org/excluded-repo"),
+			commit("a2", "excluded-org/excluded-repo"),
+			commit("b1", "example-org/example-repo"),
+		},
+		nil, nil,
+	)
+	srv.reposCommits["excluded-org/excluded-repo"] = 50
+	srv.reposCommits["example-org/example-repo"] = 1
+
+	c := testClient(t, srv.URL)
+
+	gh := tpConfig(10)
+	gh.ExcludeOrgs = []string{"excluded-org"}
+	got, err := TopProjects(context.Background(), c, "octocat", gh)
+	if err != nil {
+		t.Fatalf("TopProjects: %v", err)
+	}
+
+	// Only example-org/example-repo should be in results
+	if len(got) != 1 || got[0].Repo != "example-org/example-repo" {
+		t.Errorf("got %+v, want only example-org/example-repo (excluded-org must be dropped)", got)
+	}
+
+	// No exact commit request should have been made for the excluded repo
+	for _, req := range srv.reposCommitsReqs {
+		if strings.Contains(req, "excluded-org") {
+			t.Errorf("unexpected request to excluded repo: %s", req)
+		}
+	}
+}
+
+// TestTopProjectsNoNewSearchCallsForExactCommits verifies that the exact
+// commit fetch does not introduce any new search API calls - it only uses
+// core REST /repos/{owner}/{repo}/commits endpoints.
+func TestTopProjectsNoNewSearchCallsForExactCommits(t *testing.T) {
+	srv := newTopProjectsServer(t,
+		[]commitItem{
+			commit("a1", "org/repo-a"),
+			commit("b1", "org/repo-b"),
+		},
+		[]searchIssue{
+			pr(1, "pr", "org/repo-a"),
+		},
+		[]event{
+			ev("PullRequestReviewEvent", "org/repo-b", time.Now()),
+		},
+	)
+	srv.reposCommits["org/repo-a"] = 50
+	srv.reposCommits["org/repo-b"] = 25
+
+	c := testClient(t, srv.URL)
+
+	if _, err := TopProjects(context.Background(), c, "octocat", tpConfig(10)); err != nil {
+		t.Fatalf("TopProjects: %v", err)
+	}
+
+	// Should still have exactly 1 /search/commits and 1 /search/issues call
+	if n := srv.countPath("/search/commits"); n != 1 {
+		t.Errorf("/search/commits requests = %d, want exactly 1", n)
+	}
+	if n := srv.countPath("/search/issues"); n != 1 {
+		t.Errorf("/search/issues requests = %d, want exactly 1", n)
+	}
+}
+
+// TestTopProjectsExactCountsViaZeroToken verifies that exact commit counts
+// work unauthenticated (the credential-free guarantee from invariant 1).
+func TestTopProjectsExactCountsViaZeroToken(t *testing.T) {
+	srv := newTopProjectsServer(t,
+		[]commitItem{commit("a1", "org/repo")},
+		nil, nil,
+	)
+	srv.reposCommits["org/repo"] = 75
+
+	c := testClient(t, srv.URL)
+
+	got, err := TopProjects(context.Background(), c, "octocat", tpConfig(10))
+	if err != nil {
+		t.Fatalf("TopProjects: %v", err)
+	}
+
+	if len(got) != 1 || got[0].Commits != 75 {
+		t.Errorf("got %+v, want 75 commits (unauthenticated request)", got)
+	}
+}
+
+// TestTopProjectsExactCommitCountsPassesCorrectQueryParams asserts that the
+// /repos/{owner}/{repo}/commits requests include the correct query parameters:
+// author (filtered to user), since (from TimeWindow), and until (current time).
+// This test would fail if these filters are removed or wrong, catching any
+// regression where the exact commit count falls back to search results.
+func TestTopProjectsExactCommitCountsPassesCorrectQueryParams(t *testing.T) {
+	srv := newTopProjectsServer(t,
+		[]commitItem{commit("a1", "org/repo-test")},
+		nil, nil,
+	)
+	srv.reposCommits["org/repo-test"] = 15
+
+	c := testClient(t, srv.URL)
+
+	gh := tpConfig(10)
+	gh.TopProjects.TimeWindow = "7d"
+	if _, err := TopProjects(context.Background(), c, "octocat", gh); err != nil {
+		t.Fatalf("TopProjects: %v", err)
+	}
+
+	if len(srv.reposCommitsQueries) != 1 {
+		t.Fatalf("got %d /repos/.../commits requests, want exactly 1", len(srv.reposCommitsQueries))
+	}
+
+	q := srv.reposCommitsQueries[0]
+
+	// Verify author parameter
+	if got, want := q.Get("author"), "octocat"; got != want {
+		t.Errorf("author param = %q, want %q", got, want)
+	}
+
+	// Verify since parameter (should be 7 days ago, in RFC3339 format as serialized by go-github)
+	wantSinceParsed := time.Now().UTC().AddDate(0, 0, -7)
+	if got := q.Get("since"); got == "" {
+		t.Error("since param is empty, want an RFC3339 timestamp")
+	} else {
+		// Parse the returned since value to verify it's in the right ballpark (same day)
+		gotTime, err := time.Parse(time.RFC3339, got)
+		if err != nil {
+			t.Errorf("since param %q is not valid RFC3339: %v", got, err)
+		} else if gotTime.Format("2006-01-02") != wantSinceParsed.Format("2006-01-02") {
+			t.Errorf("since param date = %q, want date %q", gotTime.Format("2006-01-02"), wantSinceParsed.Format("2006-01-02"))
+		}
+	}
+
+	// Verify until parameter is set (should be an RFC3339 timestamp)
+	if got := q.Get("until"); got == "" {
+		t.Error("until param is empty, want an RFC3339 timestamp")
+	} else if _, err := time.Parse(time.RFC3339, got); err != nil {
+		t.Errorf("until param %q is not valid RFC3339: %v", got, err)
+	}
+
+	// Verify per_page parameter is 1 (for pagination via Link header)
+	if got, want := q.Get("per_page"), "1"; got != want {
+		t.Errorf("per_page param = %q, want %q", got, want)
 	}
 }
