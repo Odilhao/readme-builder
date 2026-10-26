@@ -28,7 +28,7 @@ RUN source /tmp/hermeto.env && \
 #           arm64 (sha256:42ae677c641858a6347005914586184474501cceb30dfecf4a20062b3bc00312)
 # Distroless static images are ~2 MiB and include CA certificates, timezone data,
 # and nonroot user (UID 65532), with no shell or package manager.
-FROM gcr.io/distroless/static-debian13@sha256:9197324ba51d9cd071af8505989365c006adf9d6d2067eada25aef00abbb5278
+FROM gcr.io/distroless/static-debian13@sha256:15f8637509792e05b97d83451b0b6ccfa4abd548f997e406ac1e72c87fe1fa78
 
 # Ship the LICENSE file (GPL-3.0-or-later).
 COPY LICENSE /
